@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Database Query Interface</title>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #000000; 
+            color: #ffffff; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+        .section { 
+            background: #111111; 
+            border: 1px solid #333333; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin: 20px 0; 
+        }
+        h1, h2 { 
+            color: #ffffff; 
+            margin-top: 0; 
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+        .form-group { 
+            margin: 15px 0; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            color: #ffffff; 
+            font-weight: 500; 
+        }
+        input, select, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #333333; 
+            border-radius: 4px; 
+            background: #222222; 
+            color: #ffffff; 
+            font-family: 'Inter', sans-serif; 
+        }
+        button { 
+            background: #ffffff; 
+            color: #000000; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: 500; 
+            transition: all 0.2s; 
+        }
+        button:hover { 
+            background: #cccccc; 
+        }
+        .results { 
+            background: #0a0a0a; 
+            border: 1px solid #333333; 
+            border-radius: 4px; 
+            padding: 15px; 
+            margin: 15px 0; 
+            max-height: 400px; 
+            overflow-y: auto; 
+        }
+        .query-examples { 
+            background: #1a1a1a; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin: 10px 0; 
+        }
+        .example { 
+            margin: 10px 0; 
+            padding: 8px; 
+            background: #333333; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            transition: background 0.2s; 
+        }
+        .example:hover { 
+            background: #444444; 
+        }
+        pre { 
+            background: #222222; 
+            padding: 10px; 
+            border-radius: 4px; 
+            overflow-x: auto; 
+            white-space: pre-wrap; 
+        }
+        .error { 
+            color: #ff6b6b; 
+        }
+        .success { 
+            color: #51cf66; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 RAG Database Query Interface</h1>
+        
+        <div class="grid">
+            <!-- Panel izquierdo: Consultas -->
+            <div>
+                <div class="section">
+                    <h2>🛠️ Consultas Personalizadas</h2>
+                    
+                    <div class="form-group">
+                        <label for="queryType">Tipo de Consulta:</label>
+                        <select id="queryType" onchange="toggleQueryType()">
+                            <option value="template">Plantilla Predefinida</option>
+                            <option value="natural">Lenguaje Natural</option>
+                            <option value="custom">SQL Personalizado</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Plantillas Predefinidas -->
+                    <div id="templateSection">
+                        <div class="form-group">
+                            <label for="templateName">Plantilla:</label>
+                            <select id="templateName" onchange="updateParameters()">
+                                <option value="">Selecciona una plantilla...</option>
+                                <option value="count_by_type">Contar por Tipo de Archivo</option>
+                                <option value="count_by_project">Contar por Proyecto</option>
+                                <option value="search_by_keyword">Buscar por Palabra Clave</option>
+                                <option value="files_by_project_and_type">Archivos por Proyecto y Tipo</option>
+                                <option value="recent_documents">Documentos Recientes</option>
+                                <option value="documents_with_word">Documentos con Palabra</option>
+                            </select>
+                        </div>
+                        
+                        <div id="parameters"></div>
+                    </div>
+                    
+                    <!-- Lenguaje Natural -->
+                    <div id="naturalSection" style="display: none;">
+                        <div class="form-group">
+                            <label for="naturalQuery">Pregunta en Lenguaje Natural:</label>
+                            <textarea id="naturalQuery" rows="3" placeholder="Ej: ¿Cuántos PDFs hay en el proyecto Control de Calidad?"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- SQL Personalizado -->
+                    <div id="customSection" style="display: none;">
+                        <div class="form-group">
+                            <label for="customQuery">Consulta SQL:</label>
+                            <textarea id="customQuery" rows="5" placeholder="SELECT * FROM document_chunks LIMIT 10;"></textarea>
+                        </div>
+                    </div>
+                    
+                    <button onclick="executeQuery()">🚀 Ejecutar Consulta</button>
+                    <button onclick="loadTemplates()">📋 Cargar Plantillas</button>
+                </div>
+                
+                <!-- Ejemplos de Consultas -->
+                <div class="section">
+                    <h2>💡 Ejemplos de Consultas</h2>
+                    <div class="query-examples">
+                        <div class="example" onclick="setExample('natural', '¿Cuántos PDFs hay por proyecto?')">
+                            🔢 ¿Cuántos PDFs hay por proyecto?
+                        </div>
+                        <div class="example" onclick="setExample('natural', 'Buscar documentos sobre calidad')">
+                            🔍 Buscar documentos sobre calidad
+                        </div>
+                        <div class="example" onclick="setExample('custom', 'SELECT project_id, COUNT(*) FROM document_chunks GROUP BY project_id')">
+                            📊 Chunks por proyecto (SQL)
+                        </div>
+                        <div class="example" onclick="setExample('natural', 'Documentos más recientes')">
+                            ⏰ Documentos más recientes
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Panel derecho: Resultados -->
+            <div>
+                <div class="section">
+                    <h2>📊 Resultados</h2>
+                    <div id="results" class="results">
+                        <p>Los resultados aparecerán aquí...</p>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2>🔧 Información de la Consulta</h2>
+                    <div id="queryInfo" class="results">
+                        <p>Información de la consulta aparecerá aquí...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        function toggleQueryType() {
+            const type = document.getElementById('queryType').value;
+            document.getElementById('templateSection').style.display = type === 'template' ? 'block' : 'none';
+            document.getElementById('naturalSection').style.display = type === 'natural' ? 'block' : 'none';
+            document.getElementById('customSection').style.display = type === 'custom' ? 'block' : 'none';
+        }
+        
+        function updateParameters() {
+            const template = document.getElementById('templateName').value;
+            const paramDiv = document.getElementById('parameters');
+            
+            paramDiv.innerHTML = '';
+            
+            if (template === 'search_by_keyword' || template === 'documents_with_word') {
+                paramDiv.innerHTML = `
+                    <div class="form-group">
+                        <label>Palabra Clave:</label>
+                        <input type="text" id="param_keyword" placeholder="calidad">
+                    </div>
+                    <div class="form-group">
+                        <label>Límite:</label>
+                        <input type="number" id="param_limit" value="10">
+                    </div>
+                `;
+            } else if (template === 'files_by_project_and_type') {
+                paramDiv.innerHTML = `
+                    <div class="form-group">
+                        <label>Proyecto:</label>
+                        <input type="text" id="param_project" placeholder="Control de Calidad">
+                    </div>
+                `;
+            } else if (template === 'recent_documents') {
+                paramDiv.innerHTML = `
+                    <div class="form-group">
+                        <label>Límite:</label>
+                        <input type="number" id="param_limit" value="10">
+                    </div>
+                `;
+            }
+        }
+        
+        async function executeQuery() {
+            const type = document.getElementById('queryType').value;
+            const resultsDiv = document.getElementById('results');
+            const queryInfoDiv = document.getElementById('queryInfo');
+            
+            resultsDiv.innerHTML = '<p>Ejecutando consulta...</p>';
+            
+            try {
+                let response;
+                
+                if (type === 'template') {
+                    const templateName = document.getElementById('templateName').value;
+                    const params = {};
+                    
+                    // Recoger parámetros
+                    if (document.getElementById('param_keyword')) {
+                        params.keyword = document.getElementById('param_keyword').value;
+                        params.word = document.getElementById('param_keyword').value;
+                    }
+                    if (document.getElementById('param_limit')) {
+                        params.limit = parseInt(document.getElementById('param_limit').value);
+                    }
+                    if (document.getElementById('param_project')) {
+                        params.project = document.getElementById('param_project').value;
+                    }
+                    
+                    response = await fetch(`${API_BASE}/query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            template_name: templateName,
+                            parameters: params
+                        })
+                    });
+                    
+                } else if (type === 'natural') {
+                    const question = document.getElementById('naturalQuery').value;
+                    
+                    response = await fetch(`${API_BASE}/query/natural`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            question: question,
+                            max_context_docs: 20
+                        })
+                    });
+                    
+                } else if (type === 'custom') {
+                    const customQuery = document.getElementById('customQuery').value;
+                    
+                    response = await fetch(`${API_BASE}/query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            custom_query: customQuery
+                        })
+                    });
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    resultsDiv.innerHTML = `<p class="error">Error: ${result.error}</p>`;
+                } else {
+                    displayResults(result);
+                }
+                
+                // Mostrar información de la consulta
+                queryInfoDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="error">Error de conexión: ${error.message}</p>`;
+            }
+        }
+        
+        function displayResults(result) {
+            const resultsDiv = document.getElementById('results');
+            
+            if (result.data && result.data.length > 0) {
+                let html = `<p class="success">✅ ${result.data.length} resultados encontrados</p>`;
+                html += '<table style="width: 100%; border-collapse: collapse;">';
+                
+                // Encabezados
+                const headers = Object.keys(result.data[0]);
+                html += '<tr>';
+                headers.forEach(header => {
+                    html += `<th style="border: 1px solid #333; padding: 8px; background: #333;">${header}</th>`;
+                });
+                html += '</tr>';
+                
+                // Datos
+                result.data.forEach(row => {
+                    html += '<tr>';
+                    headers.forEach(header => {
+                        let value = row[header];
+                        if (typeof value === 'string' && value.length > 50) {
+                            value = value.substring(0, 50) + '...';
+                        }
+                        html += `<td style="border: 1px solid #333; padding: 8px;">${value || ''}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                
+                html += '</table>';
+                resultsDiv.innerHTML = html;
+            } else if (result.results) {
+                // Para búsquedas semánticas
+                displayResults({data: result.results});
+            } else {
+                resultsDiv.innerHTML = '<p>No se encontraron resultados.</p>';
+            }
+        }
+        
+        async function loadTemplates() {
+            try {
+                const response = await fetch(`${API_BASE}/query/templates`);
+                const templates = await response.json();
+                
+                document.getElementById('queryInfo').innerHTML = `
+                    <h3>Plantillas Disponibles:</h3>
+                    <pre>${JSON.stringify(templates, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error cargando plantillas:', error);
+            }
+        }
+        
+        function setExample(type, query) {
+            document.getElementById('queryType').value = type;
+            toggleQueryType();
+            
+            if (type === 'natural') {
+                document.getElementById('naturalQuery').value = query;
+            } else if (type === 'custom') {
+                document.getElementById('customQuery').value = query;
+            }
+        }
+    </script>
+</body>
+</html>

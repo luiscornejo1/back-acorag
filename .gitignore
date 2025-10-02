@@ -1,0 +1,198 @@
+# ====================================
+# ARCHIVOS GRANDES QUE CAUSAN ERRORES
+# ====================================
+
+# Entorno virtual Python (NUNCA subir) - Todas las variaciones
+.venv/
+.venv311/
+*/.venv/
+*/.venv311/
+backend-acorag/.venv311/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Datos grandes (usar alternativas) - Rutas específicas y generales
+data/
+*/data/
+backend-acorag/data/
+backend-acorag/data/mis_correos.json
+mis_correos.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!*.config.json
+
+# ====================================
+# ARCHIVOS ESTÁNDAR DE PYTHON
+# ====================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ====================================
+# VARIABLES DE ENTORNO Y SECRETOS
+# ====================================
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.vscode/settings.json
+
+# ====================================
+# NODE.JS / FRONTEND
+# ====================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build outputs
+dist/
+build/
+
+# ====================================
+# BASES DE DATOS Y LOGS
+# ====================================
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ====================================
+# SISTEMA OPERATIVO
+# ====================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# ====================================
+# EDITORES E IDEs
+# ====================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# ====================================
+# DOCKER Y CONTENEDORES
+# ====================================
+
+# Docker override
+docker-compose.override.yml
+
+# ====================================
+# ARCHIVOS TEMPORALES
+# ====================================
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+# ====================================
+# MODELOS Y EMBEDDINGS (OPCIONALES)
+# ====================================
+
+# Si tienes modelos grandes descargados
+models/
+embeddings/
+*.bin
+*.safetensors

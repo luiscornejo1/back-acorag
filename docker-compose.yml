@@ -1,0 +1,12 @@
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aconex_rag
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+volumes:
+  dbdata:
