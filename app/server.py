@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from app.search import search
+from app.search_core import semantic_search
 
 app = FastAPI()
 
@@ -15,4 +15,4 @@ def health():
 
 @app.post("/search")
 def do_search(q: Query):
-    return {"results": search(q.query, q.project_id, q.top_k)}
+    return {"results": semantic_search(q.query, q.project_id, q.top_k)}
