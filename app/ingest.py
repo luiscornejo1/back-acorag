@@ -247,7 +247,7 @@ def ensure_schema(conn, vector_dim: int):
         cur.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_document_chunks_vec
-            ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+            ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 470);
             """
         )
     conn.commit()
@@ -383,7 +383,7 @@ def main(json_path: str, project_id: str, batch_size: int = 512):
         doc_batch.append(doc)
 
         # Chunking del cuerpo (metadatos consolidados)
-        for piece in simple_chunk(doc["body_text"], size=1200, overlap=200):
+        for piece in simple_chunk(doc["body_text"], size=2400, overlap=240):
             chunk_meta.append(
                 {
                     "chunk_id": stable_chunk_id(doc["document_id"], piece),  # determinista
