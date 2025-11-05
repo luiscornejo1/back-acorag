@@ -33,6 +33,12 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
     SELECT
       dc.document_id,
       d.title,
+      COALESCE(d.number, '') AS number,
+      COALESCE(d.category, '') AS category,
+      COALESCE(d.doc_type, '') AS doc_type,
+      COALESCE(d.revision, '') AS revision,
+      COALESCE(d.filename, '') AS filename,
+      d.date_modified,
       dc.content AS snippet,
       (dc.embedding <=> q.v) AS score
     FROM document_chunks dc

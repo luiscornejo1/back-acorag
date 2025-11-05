@@ -16,7 +16,7 @@ app.add_middleware(
 
 class Query(BaseModel):
     query: str
-    project_id: str
+    project_id: str | None = None
     top_k: int = 10
 
 @app.get("/health")
@@ -25,4 +25,5 @@ def health():
 
 @app.post("/search")
 def do_search(q: Query):
-    return {"results": semantic_search(q.query, q.project_id, q.top_k)}
+    # Retornar array directo para que coincida con el frontend
+    return semantic_search(q.query, q.project_id, q.top_k)
