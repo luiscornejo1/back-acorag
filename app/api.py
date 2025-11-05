@@ -23,7 +23,7 @@ class SearchRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1)
-    max_context_docs: int = Field(default=3, ge=1, le=10)
+    max_context_docs: int = Field(default=15, ge=1, le=50)
 
 class ChatResponse(BaseModel):
     question: str
