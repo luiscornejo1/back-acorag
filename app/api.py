@@ -74,12 +74,19 @@ def chat(req: ChatRequest) -> ChatResponse:
         
         # Generar respuesta inteligente con Groq
         import os
+        import sys
         groq_key = os.environ.get("GROQ_API_KEY")
+        
+        print(f"[DEBUG] GROQ_API_KEY presente: {bool(groq_key)}", file=sys.stderr)
+        print(f"[DEBUG] Longitud de key: {len(groq_key) if groq_key else 0}", file=sys.stderr)
         
         if groq_key:
             try:
+                print(f"[DEBUG] Intentando importar Groq...", file=sys.stderr)
                 from groq import Groq
+                print(f"[DEBUG] Groq importado exitosamente", file=sys.stderr)
                 client = Groq(api_key=groq_key)
+                print(f"[DEBUG] Cliente Groq creado", file=sys.stderr)
                 
                 system_prompt = """Eres un asistente experto en documentos de construcción y arquitectura.
 Tu trabajo es responder preguntas basándote ÚNICAMENTE en los documentos proporcionados.
@@ -103,9 +110,12 @@ Por favor, responde la pregunta basándote en la información de los documentos 
                     temperature=0.3,
                     max_tokens=1000
                 )
-                
+                print(f"[DEBUG] Respuesta recibida de Groq", file=sys.stderr)
                 answer = response.choices[0].message.content
             except Exception as e:
+                print(f"[ERROR] {str(e)}", file=sys.stderr)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
                 # Si falla Groq, usar respuesta básica
                 answer = f"Encontré {len(rows)} documentos relevantes. Aquí está un resumen:\n\n"
                 for i, row in enumerate(rows[:3], 1):
