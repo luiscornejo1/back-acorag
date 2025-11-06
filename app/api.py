@@ -2,10 +2,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
+import uuid
 
 from .search_core import semantic_search
+from .analytics import router as analytics_router
 
 app = FastAPI(title="Aconex RAG API", version="1.0")
+
+# Incluir router de analytics
+app.include_router(analytics_router, prefix="/api", tags=["Analytics"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +35,12 @@ class ChatResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]]
     context_used: str
+    session_id: str  # Para trackear feedback
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    rating: int = Field(..., ge=1, le=5)  # 1-5 stars o 1=👎, 5=👍
+    comment: Optional[str] = None
 
 @app.post("/search")
 def search(req: SearchRequest) -> List[Dict[str, Any]]:
@@ -141,10 +152,47 @@ Analiza cuidadosamente los documentos y responde la pregunta del usuario."""
             question=req.question,
             answer=answer,
             sources=rows,
-            context_used=context
+            context_used=context,
+            session_id=str(uuid.uuid4())  # ID único para feedback
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/feedback")
+def submit_feedback(req: FeedbackRequest):
+    """Guarda feedback de usuarios sobre las respuestas del chat"""
+    try:
+        import psycopg2
+        import os
+        from datetime import datetime
+        
+        conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+        cursor = conn.cursor()
+        
+        # Crear tabla si no existe
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_feedback (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        
+        # Insertar feedback
+        cursor.execute(
+            "INSERT INTO chat_feedback (session_id, rating, comment) VALUES (%s, %s, %s)",
+            (req.session_id, req.rating, req.comment)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"status": "success", "message": "Gracias por tu feedback"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error guardando feedback: {str(e)}")
 
 @app.get("/health")
 def health():
