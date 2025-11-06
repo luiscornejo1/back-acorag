@@ -217,7 +217,11 @@ def ensure_schema(conn, vector_dim: int):
             """,
             (vector_dim,),
         )
-
+    
+    # Commit para que las tablas existan antes de verificar
+    conn.commit()
+    
+    with conn.cursor() as cur:
         # Si la tabla ya existía con otra dimensión, la ajustamos
         cur.execute(
             """
