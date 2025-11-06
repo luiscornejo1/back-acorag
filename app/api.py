@@ -89,17 +89,26 @@ def chat(req: ChatRequest) -> ChatResponse:
                 print(f"[DEBUG] Cliente Groq creado", file=sys.stderr)
                 
                 system_prompt = """Eres un asistente experto en documentos de construcción y arquitectura.
-Tu trabajo es responder preguntas basándote ÚNICAMENTE en los documentos proporcionados.
-Responde de manera clara, profesional y específica en español.
-Si la información no está en los documentos, indícalo claramente.
-Cita los documentos relevantes en tu respuesta."""
-                
-                user_prompt = f"""Pregunta: {req.question}
 
-Documentos disponibles:
+INSTRUCCIONES CRÍTICAS:
+1. Responde ÚNICAMENTE basándote en los documentos proporcionados
+2. Si la información NO está en los documentos, di claramente: "No encontré información sobre esto en los documentos disponibles"
+3. Cita SIEMPRE los documentos que uses (por número de documento y título)
+4. Sé ESPECÍFICO y PRECISO - no inventes ni asumas información
+5. Si encuentras contradicciones, menciónalas
+6. Responde en español de forma profesional y clara
+
+FORMATO DE RESPUESTA:
+- Respuesta directa a la pregunta
+- Citas de los documentos relevantes
+- Si aplica, menciona números de documento, fechas, categorías"""
+                
+                user_prompt = f"""Pregunta del usuario: {req.question}
+
+DOCUMENTOS DISPONIBLES:
 {context}
 
-Por favor, responde la pregunta basándote en la información de los documentos proporcionados."""
+Analiza cuidadosamente los documentos y responde la pregunta del usuario."""
                 
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",  # Modelo más potente de Groq

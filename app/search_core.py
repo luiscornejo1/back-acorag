@@ -27,28 +27,48 @@ def encode_vec_str(text: str) -> str:
 
 def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes: int = 10):
     vec_str = encode_vec_str(query)
+    
+    # Búsqueda híbrida: vectorial + texto (para mejorar precisión)
     sql = f"""
     SET LOCAL ivfflat.probes = %s;
-    WITH q AS ( SELECT %s::vector AS v )
-    SELECT
-      dc.document_id,
-      d.title,
-      COALESCE(d.number, '') AS number,
-      COALESCE(d.category, '') AS category,
-      COALESCE(d.doc_type, '') AS doc_type,
-      COALESCE(d.revision, '') AS revision,
-      COALESCE(d.filename, '') AS filename,
-      d.date_modified,
-      dc.content AS snippet,
-      (dc.embedding <=> q.v) AS score
-    FROM document_chunks dc
-    JOIN documents d ON d.document_id = dc.document_id
-    CROSS JOIN q
-    {"WHERE dc.project_id = %s" if project_id else ""}
-    ORDER BY dc.embedding <=> q.v
+    WITH q AS ( SELECT %s::vector AS v ),
+    vector_search AS (
+      SELECT
+        dc.document_id,
+        d.title,
+        COALESCE(d.number, '') AS number,
+        COALESCE(d.category, '') AS category,
+        COALESCE(d.doc_type, '') AS doc_type,
+        COALESCE(d.revision, '') AS revision,
+        COALESCE(d.filename, '') AS filename,
+        d.date_modified,
+        dc.content AS snippet,
+        (dc.embedding <=> q.v) AS vector_score,
+        -- Búsqueda de texto full-text
+        ts_rank(
+          to_tsvector('spanish', COALESCE(d.title, '') || ' ' || COALESCE(dc.content, '') || ' ' || COALESCE(d.number, '')),
+          plainto_tsquery('spanish', %s)
+        ) AS text_score
+      FROM document_chunks dc
+      JOIN documents d ON d.document_id = dc.document_id
+      CROSS JOIN q
+      {"WHERE dc.project_id = %s" if project_id else ""}
+    )
+    SELECT 
+      *,
+      -- Score combinado (70% vectorial + 30% texto)
+      (1 - vector_score) * 0.7 + text_score * 0.3 AS combined_score
+    FROM vector_search
+    WHERE vector_score < 0.8  -- Filtrar resultados muy irrelevantes
+      OR text_score > 0.01    -- O que tengan match de texto
+    ORDER BY combined_score DESC
     LIMIT %s;
     """
-    params = [probes, vec_str] + ([project_id] if project_id else []) + [top_k]
+    params = [probes, vec_str, query] + ([project_id] if project_id else []) + [top_k]
     with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(sql, params)
-        return cur.fetchall()
+        rows = cur.fetchall()
+        # Renombrar combined_score a score para compatibilidad
+        for row in rows:
+            row['score'] = 1 - row['combined_score']  # Invertir para que menor sea mejor
+        return rows
