@@ -122,6 +122,9 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+*.sql
+*.dump
+datos_backup.sql
 
 # Logs
 logs
