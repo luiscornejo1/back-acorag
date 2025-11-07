@@ -1,6 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from pgvector.psycopg2 import register_vector
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 import logging
@@ -14,7 +15,9 @@ def get_conn():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL no configurada")
-    return psycopg2.connect(url)
+    conn = psycopg2.connect(url)
+    register_vector(conn)  # Registrar el tipo vector
+    return conn
 
 _model = None
 def get_model():
