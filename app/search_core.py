@@ -70,5 +70,5 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         rows = cur.fetchall()
         # Renombrar combined_score a score para compatibilidad
         for row in rows:
-            row['score'] = 1 - row['combined_score']  # Invertir para que menor sea mejor
+            row['score'] = row.get('combined_score', 0)  # Usar combined_score directamente
         return rows
