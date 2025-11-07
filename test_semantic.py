@@ -11,7 +11,8 @@ def test_semantic_search():
     """
     Prueba búsquedas semánticas vs sintácticas
     """
-    base_url = "http://localhost:8000"
+    # Usar Railway backend o localhost si está disponible
+    base_url = "https://back-acorag-production.up.railway.app"
     
     print("🔍 PRUEBAS DE BÚSQUEDA SEMÁNTICA")
     print("=" * 50)
@@ -101,7 +102,7 @@ def test_multilingual_search():
         {"spanish": "cronograma de trabajo", "english": "work schedule"}
     ]
     
-    base_url = "http://localhost:8000"
+    base_url = "https://back-acorag-production.up.railway.app"
     
     for test in multilingual_tests:
         print(f"\n🔄 Comparando: '{test['spanish']}' vs '{test['english']}'")
@@ -141,7 +142,7 @@ def test_multilingual_search():
 if __name__ == "__main__":
     # Verificar que el backend esté corriendo
     try:
-        response = requests.get("http://localhost:8000/health")
+        response = requests.get("https://back-acorag-production.up.railway.app/health")
         if response.status_code == 200:
             print("✅ Backend conectado correctamente")
             test_semantic_search()

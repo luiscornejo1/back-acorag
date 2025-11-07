@@ -178,7 +178,7 @@ def get_model_dim(model: SentenceTransformer) -> int:
 
 
 def ensure_schema(conn, vector_dim: int):
-    """Crea extensión y tablas si no existen; ajusta dimensión de 'embedding' si difiere."""
+    """Crea extensión y tablas si no existen."""
     with conn.cursor() as cur:
         cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
@@ -204,7 +204,7 @@ def ensure_schema(conn, vector_dim: int):
         )
 
         cur.execute(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS document_chunks (
               chunk_id     UUID PRIMARY KEY,
               document_id  TEXT NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
@@ -212,48 +212,23 @@ def ensure_schema(conn, vector_dim: int):
               title        TEXT,
               date_modified TIMESTAMPTZ,
               content      TEXT NOT NULL,
-              embedding    VECTOR(%s)
+              embedding    VECTOR({vector_dim})
             );
-            """,
-            (vector_dim,),
-        )
-    
-    # Commit para que las tablas existan antes de verificar
-    conn.commit()
-    
-    with conn.cursor() as cur:
-        # Si la tabla ya existía con otra dimensión, la ajustamos
-        cur.execute(
-            """
-            SELECT format_type(a.atttypid, a.atttypmod) AS type
-            FROM pg_attribute a
-            JOIN pg_class c ON a.attrelid = c.oid
-            JOIN pg_namespace n ON c.relnamespace = n.oid
-            WHERE n.nspname = 'public'
-              AND c.relname = 'document_chunks'
-              AND a.attname = 'embedding'
-              AND a.attnum > 0
-              AND NOT a.attisdropped
-            LIMIT 1;
             """
         )
-        row = cur.fetchone()
-        if row:
-            m = re.match(r"vector\((\d+)\)", row[0] or "")
-            if m and int(m.group(1)) != vector_dim:
-                cur.execute(
-                    f"ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector({vector_dim});"
-                )
 
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_documents_proj ON documents(project_id);"
         )
+        
         cur.execute(
-            """
+            f"""
             CREATE INDEX IF NOT EXISTS idx_document_chunks_vec
             ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 470);
             """
         )
+    
+    conn.commit()
     conn.commit()
 
 
