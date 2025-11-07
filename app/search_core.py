@@ -40,7 +40,6 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         
         # Búsqueda híbrida: vectorial + texto (para mejorar precisión)
         sql = f"""
-        SET LOCAL ivfflat.probes = %s;
         WITH q AS ( SELECT %s::vector AS v )
         SELECT
           dc.document_id,
@@ -70,10 +69,12 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         ORDER BY score DESC
         LIMIT %s;
         """
-        params = [probes, vec_str, query, query] + ([project_id] if project_id else []) + [top_k]
+        params = [vec_str, query, query] + ([project_id] if project_id else []) + [top_k]
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Configurar ivfflat probes antes del query
+            cur.execute(f"SET LOCAL ivfflat.probes = {probes};")
             cur.execute(sql, params)
             rows = cur.fetchall()
             logger.info(f"✅ Resultados obtenidos: {len(rows)} filas")
