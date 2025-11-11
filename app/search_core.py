@@ -56,22 +56,27 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           d.date_modified,
           dc.content AS snippet,
           (dc.embedding <=> '{query_embedding}') AS vector_score,
-          ts_rank(
-            to_tsvector('spanish', COALESCE(d.title, '') || ' ' || COALESCE(dc.content, '') || ' ' || COALESCE(d.number, '')),
-            plainto_tsquery('spanish', %s)
+          -- Búsqueda de texto con boost por campo
+          (
+            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +  -- Título 2x peso
+            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +  -- Número 1.5x peso
+            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0   -- Contenido 1x peso
           ) AS text_score,
-          (1 - (dc.embedding <=> '{query_embedding}')) * 0.7 + ts_rank(
-            to_tsvector('spanish', COALESCE(d.title, '') || ' ' || COALESCE(dc.content, '') || ' ' || COALESCE(d.number, '')),
-            plainto_tsquery('spanish', %s)
-          ) * 0.3 AS score
+          -- Score combinado (60% vectorial + 40% texto con boost)
+          (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
+          (
+            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
+            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
+          ) * 0.4 AS score
         FROM document_chunks dc
         JOIN documents d ON d.document_id = dc.document_id
         {where_clause}
         ORDER BY score DESC
         LIMIT %s;
         """
-        # Ahora solo pasamos: query (2 veces), project_id (opcional), top_k
-        params = [query, query] + ([project_id] if project_id else []) + [top_k]
+        # Ahora pasamos query 6 veces (para cada campo de texto)
+        params = [query, query, query, query, query, query] + ([project_id] if project_id else []) + [top_k]
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:

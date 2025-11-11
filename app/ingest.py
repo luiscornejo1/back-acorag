@@ -121,12 +121,18 @@ def normalize_doc(obj: Dict[str, Any], default_project_id: str) -> Dict[str, Any
     project_id = obj.get("project_id") or m.get("SelectList2") or default_project_id
 
     # Construye cuerpo semántico con metadatos ordenados
-    body_lines = [f"Título: {title}", f"DocumentId: {document_id}"]
-    for k in META_FIELDS_ORDER:
-        v = m.get(k)
-        if v not in (None, ""):
-            body_lines.append(f"{k}: {v}")
-    body_text = "\n".join(body_lines)[:200_000]
+    # PRIORIDAD: usar full_text si existe (contenido sintético), sino metadata básico
+    if "full_text" in obj and obj["full_text"]:
+        body_text = obj["full_text"][:200_000]
+    elif "enriched_metadata_text" in obj and obj["enriched_metadata_text"]:
+        body_text = obj["enriched_metadata_text"][:200_000]
+    else:
+        body_lines = [f"Título: {title}", f"DocumentId: {document_id}"]
+        for k in META_FIELDS_ORDER:
+            v = m.get(k)
+            if v not in (None, ""):
+                body_lines.append(f"{k}: {v}")
+        body_text = "\n".join(body_lines)[:200_000]
 
     # Guarda también el raw por si luego quieres enriquecer
     raw_json = obj
@@ -362,7 +368,8 @@ def main(json_path: str, project_id: str, batch_size: int = 512):
         doc_batch.append(doc)
 
         # Chunking del cuerpo (metadatos consolidados)
-        for piece in simple_chunk(doc["body_text"], size=2400, overlap=240):
+        # Cambio a chunks más pequeños para mejor precisión semántica
+        for piece in simple_chunk(doc["body_text"], size=800, overlap=100):
             chunk_meta.append(
                 {
                     "chunk_id": stable_chunk_id(doc["document_id"], piece),  # determinista

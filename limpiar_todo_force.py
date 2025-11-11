@@ -3,11 +3,22 @@ Script para FORZAR limpieza COMPLETA de la base de datos
 """
 import psycopg2
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
 
 print("🔧 LIMPIEZA TOTAL DE BASE DE DATOS")
 print("="*60)
 
-conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    print("❌ Error: DATABASE_URL no encontrada en .env")
+    exit(1)
+
+print(f"📡 Conectando a: {database_url.split('@')[1] if '@' in database_url else 'localhost'}...")
+
+conn = psycopg2.connect(database_url)
 conn.autocommit = True  # Importante para DROP
 cur = conn.cursor()
 
@@ -50,7 +61,7 @@ try:
     print("✅ LIMPIEZA COMPLETADA")
     print("="*60)
     print("\n💡 Ahora ejecuta:")
-    print("   python -m app.ingest --json_path data/mis_correos_optimizado.json --project_id ACONEX")
+    print("   python -m app.ingest --json_path data/mis_correos_con_contenido_sintetico.json --project_id ACONEX_2K")
     
 except Exception as e:
     print(f"\n❌ Error: {e}")

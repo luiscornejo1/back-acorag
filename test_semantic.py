@@ -62,11 +62,17 @@ def test_semantic_search():
                 print(f"✅ Encontrados {len(results)} resultados")
                 
                 for i, result in enumerate(results, 1):
-                    score = result.get('similarity_score', 'N/A')
+                    score = result.get('score', result.get('similarity_score', 0))
                     title = result.get('title', 'Sin título')[:60]
-                    content = result.get('content', result.get('chunk_text', ''))[:100]
+                    content = result.get('snippet', result.get('content', result.get('chunk_text', '')))[:100]
                     
-                    print(f"   {i}. Score: {score:.3f} | {title}")
+                    # Convertir score a float si es necesario
+                    try:
+                        score_float = float(score) if score else 0.0
+                        print(f"   {i}. Score: {score_float:.3f} | {title}")
+                    except (ValueError, TypeError):
+                        print(f"   {i}. Score: {score} | {title}")
+                    
                     print(f"      {content}...")
                     
                     # Verificar si encontró conceptos relacionados
@@ -123,8 +129,8 @@ def test_multilingual_search():
                 results_en = resp_en.json()
                 
                 if results_es and results_en:
-                    score_es = results_es[0].get('similarity_score', 0)
-                    score_en = results_en[0].get('similarity_score', 0)
+                    score_es = float(results_es[0].get('score', results_es[0].get('similarity_score', 0)))
+                    score_en = float(results_en[0].get('score', results_en[0].get('similarity_score', 0)))
                     
                     print(f"   Español: {score_es:.3f}")
                     print(f"   English: {score_en:.3f}")
