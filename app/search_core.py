@@ -36,15 +36,13 @@ def encode_vec_str(text: str) -> str:
 def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes: int = 10):
     try:
         logger.info(f"🔍 Búsqueda: query='{query}', project_id={project_id}, top_k={top_k}")
+        query_embedding = encode_vec_str(query)
+        logger.info(f"✅ Embedding generado: {len(query_embedding)} chars")
         
-        # Generar embedding
-        model = get_model()
-        query_vec = model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0]
-        query_embedding_str = '[' + ','.join(str(float(x)) for x in query_vec) + ']'
-        logger.info(f"✅ Embedding generado: {len(query_embedding_str)} chars")
+        # USAR F-STRING PARA EMBEDDING (evita problemas con psycopg2 y ::vector)
+        # Solo pasar como parámetros las búsquedas de texto
         
-        # Construir SQL sin f-string para el embedding
-        sql = """
+        sql = f"""
         SELECT
           dc.document_id,
           d.title,
@@ -55,15 +53,13 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           COALESCE(d.filename, '') AS filename,
           d.date_modified,
           dc.content AS snippet,
-          (dc.embedding <=> %s::vector) AS vector_score,
-          -- Búsqueda de texto con boost por campo
+          (dc.embedding <=> '{query_embedding}') AS vector_score,
           (
             ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
             ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
             ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
           ) AS text_score,
-          -- Score combinado (60% vectorial + 40% texto con boost)
-          (1 - (dc.embedding <=> %s::vector)) * 0.6 + 
+          (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
           (
             ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
             ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
@@ -73,29 +69,21 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         JOIN documents d ON d.document_id = dc.document_id
         """
         
-        # Construir parámetros: 2 embeddings + 6 queries
-        params = [query_embedding_str, query, query, query, query_embedding_str, query, query, query]
+        # Parámetros: solo 6 veces query (para text search)
+        params = [query, query, query, query, query, query]
         
-        # Agregar WHERE clause si hay project_id
+        # Agregar WHERE si hay project_id
         if project_id:
             sql += " WHERE dc.project_id = %s"
             params.append(project_id)
         
         # Agregar ORDER BY y LIMIT
-        sql += " ORDER BY score DESC LIMIT %s;"
+        sql += " ORDER BY score DESC LIMIT %s"
         params.append(top_k)
         
-        # Debug: contar placeholders en el SQL
-        placeholder_count = sql.count('%s')
-        logger.info(f"📊 SQL tiene {placeholder_count} placeholders, pasando {len(params)} parámetros")
-        
-        if placeholder_count != len(params):
-            logger.error(f"❌ MISMATCH: placeholders={placeholder_count}, params={len(params)}")
-            logger.error(f"SQL: {sql[:500]}...")
-        
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
+        
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Configurar ivfflat probes antes del query
             cur.execute(f"SET LOCAL ivfflat.probes = {probes};")
             cur.execute(sql, params)
             rows = cur.fetchall()
