@@ -87,6 +87,14 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         sql += " ORDER BY score DESC LIMIT %s;"
         params.append(top_k)
         
+        # Debug: contar placeholders en el SQL
+        placeholder_count = sql.count('%s')
+        logger.info(f"📊 SQL tiene {placeholder_count} placeholders, pasando {len(params)} parámetros")
+        
+        if placeholder_count != len(params):
+            logger.error(f"❌ MISMATCH: placeholders={placeholder_count}, params={len(params)}")
+            logger.error(f"SQL: {sql[:500]}...")
+        
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Configurar ivfflat probes antes del query
