@@ -54,9 +54,9 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             probes=req.probes,
         )
         
-        # FILTRO DE RELEVANCIA: Solo devolver resultados con score > 0.3 (30%)
-        # Esto elimina resultados irrelevantes o con baja similitud
-        filtered_rows = [r for r in rows if r.get('score', 0) > 0.3]
+        # FILTRO DE RELEVANCIA: Solo devolver resultados con score > 0.2 (20%)
+        # Umbral más bajo para permitir más resultados en pruebas
+        filtered_rows = [r for r in rows if r.get('score', 0) > 0.2]
         
         return filtered_rows
     except Exception as e:
