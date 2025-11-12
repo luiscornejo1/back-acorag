@@ -469,8 +469,17 @@ def get_document_file(document_id: str):
                 "json": "application/json"
             }.get(file_type, "application/octet-stream")
             
+            # Convertir a bytes si es necesario (memoryview, bytearray, etc.)
+            if isinstance(file_content, (memoryview, bytearray)):
+                content_bytes = bytes(file_content)
+            elif isinstance(file_content, bytes):
+                content_bytes = file_content
+            else:
+                # Si es string, convertir a bytes
+                content_bytes = file_content.encode() if isinstance(file_content, str) else bytes(file_content)
+            
             return Response(
-                content=file_content if isinstance(file_content, bytes) else file_content.encode(),
+                content=content_bytes,
                 media_type=media_type,
                 headers={
                     "Content-Disposition": f"inline; filename={filename or f'documento_{document_id}.{file_type}'}"
