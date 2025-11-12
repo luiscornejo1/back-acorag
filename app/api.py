@@ -1,13 +1,18 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import uuid
 import json
+import logging
+import os
 
-from .search_core import semantic_search
+from .search_core import semantic_search, get_conn
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aconex RAG API", version="1.0")
 
@@ -54,9 +59,28 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             probes=req.probes,
         )
         
-        # FILTRO DE RELEVANCIA: Solo devolver resultados con score > 0.2 (20%)
-        # Umbral más bajo para permitir más resultados en pruebas
-        filtered_rows = [r for r in rows if r.get('score', 0) > 0.2]
+        # THRESHOLD ADAPTATIVO PARA MEJOR PRECISIÓN
+        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.4
+        # - Si no, usar threshold 0.25 (permitir resultados medianos)
+        # - Siempre descartar score < 0.25 (muy irrelevantes)
+        
+        if not rows:
+            return []
+        
+        max_score = max(r.get('score', 0) for r in rows)
+        
+        # Threshold dinámico basado en el mejor resultado
+        if max_score >= 0.5:
+            threshold = 0.40  # Alta precisión: solo resultados muy relevantes
+        elif max_score >= 0.35:
+            threshold = 0.30  # Precisión media: resultados relevantes
+        else:
+            threshold = 0.25  # Permitir resultados medianos si no hay mejores
+        
+        filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
+        
+        # Log para debugging
+        logger.info(f"📊 Max score: {max_score:.3f}, Threshold usado: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
         
         return filtered_rows
     except Exception as e:
@@ -400,3 +424,115 @@ async def upload_and_query(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/document/{document_id}/file")
+def get_document_file(document_id: str):
+    """
+    Endpoint para obtener el archivo PDF/TXT/DOCX asociado a un documento.
+    
+    Si el archivo está almacenado en disco (data/pdfs_generados/), lo sirve directamente.
+    Si solo existe en BD, devuelve el contenido raw como archivo descargable.
+    """
+    try:
+        # Buscar documento en BD
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT filename, file_type, raw 
+                    FROM documents 
+                    WHERE document_id = %s
+                """, (document_id,))
+                result = cur.fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+        
+        filename, file_type, raw_content = result
+        
+        # Opción 1: Servir desde disco si existe
+        if filename:
+            # Buscar en data/pdfs_generados/
+            pdf_path = os.path.join("data", "pdfs_generados", filename)
+            if os.path.exists(pdf_path):
+                return FileResponse(
+                    pdf_path,
+                    media_type=f"application/{file_type}" if file_type else "application/pdf",
+                    filename=filename
+                )
+        
+        # Opción 2: Servir contenido raw desde BD
+        if raw_content:
+            media_type = {
+                "pdf": "application/pdf",
+                "txt": "text/plain",
+                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "json": "application/json"
+            }.get(file_type, "application/octet-stream")
+            
+            return Response(
+                content=raw_content if isinstance(raw_content, bytes) else raw_content.encode(),
+                media_type=media_type,
+                headers={
+                    "Content-Disposition": f"inline; filename={filename or f'documento_{document_id}.{file_type}'}"
+                }
+            )
+        
+        # No hay archivo disponible
+        raise HTTPException(
+            status_code=404, 
+            detail="No se encontró el archivo físico ni el contenido raw del documento"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al obtener archivo de documento {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/document/{document_id}/preview")
+def get_document_preview(document_id: str):
+    """
+    Endpoint para obtener información del documento sin descargar el archivo completo.
+    Útil para mostrar metadatos antes de abrir el PDF.
+    """
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        document_id, 
+                        title, 
+                        filename, 
+                        file_type, 
+                        doc_type,
+                        number,
+                        category,
+                        date_modified,
+                        project_id
+                    FROM documents 
+                    WHERE document_id = %s
+                """, (document_id,))
+                result = cur.fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+        
+        return {
+            "document_id": result[0],
+            "title": result[1],
+            "filename": result[2],
+            "file_type": result[3],
+            "doc_type": result[4],
+            "number": result[5],
+            "category": result[6],
+            "date_modified": result[7].isoformat() if result[7] else None,
+            "project_id": result[8],
+            "has_file": bool(result[2]),  # True si tiene filename
+            "download_url": f"/document/{result[0]}/file" if result[2] else None
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al obtener preview de documento {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

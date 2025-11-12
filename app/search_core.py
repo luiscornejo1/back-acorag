@@ -43,38 +43,65 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         # Solo pasar como parámetros las búsquedas de texto
         
         sql = f"""
+        WITH ranked AS (
+          SELECT
+            dc.document_id,
+            dc.project_id,
+            d.title,
+            COALESCE(d.number, '') AS number,
+            COALESCE(d.category, '') AS category,
+            COALESCE(d.doc_type, '') AS doc_type,
+            COALESCE(d.revision, '') AS revision,
+            COALESCE(d.filename, '') AS filename,
+            COALESCE(d.file_type, '') AS file_type,
+            d.date_modified,
+            dc.content AS snippet,
+            -- Score vectorial (1 - distancia coseno, 0-1 range)
+            (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
+            -- Score de texto con boosting agresivo en campos clave
+            (
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 2.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
+            ) AS raw_text_score
+          FROM document_chunks dc
+          JOIN documents d ON d.document_id = dc.document_id
+        )
         SELECT
-          dc.document_id,
-          d.title,
-          COALESCE(d.number, '') AS number,
-          COALESCE(d.category, '') AS category,
-          COALESCE(d.doc_type, '') AS doc_type,
-          COALESCE(d.revision, '') AS revision,
-          COALESCE(d.filename, '') AS filename,
-          d.date_modified,
-          dc.content AS snippet,
-          (dc.embedding <=> '{query_embedding}') AS vector_score,
-          (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
-          ) AS text_score,
-          (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
-          (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
-          ) * 0.4 AS score
-        FROM document_chunks dc
-        JOIN documents d ON d.document_id = dc.document_id
+          document_id,
+          project_id,
+          title,
+          number,
+          category,
+          doc_type,
+          revision,
+          filename,
+          file_type,
+          date_modified,
+          snippet,
+          vector_score,
+          -- Normalizar text_score (0-1 range)
+          CASE 
+            WHEN MAX(raw_text_score) OVER () > 0 
+            THEN raw_text_score / NULLIF(MAX(raw_text_score) OVER (), 0)
+            ELSE 0 
+          END AS text_score,
+          -- Score combinado: 70% vector + 30% texto normalizado
+          (vector_score * 0.70) + 
+          (CASE 
+            WHEN MAX(raw_text_score) OVER () > 0 
+            THEN raw_text_score / NULLIF(MAX(raw_text_score) OVER (), 0)
+            ELSE 0 
+          END * 0.30) AS score
+        FROM ranked
         """
         
-        # Parámetros: solo 6 veces query (para text search)
-        params = [query, query, query, query, query, query]
+        # Parámetros: solo 3 veces query (para text search en CTE)
+        params = [query, query, query]
         
         # Agregar WHERE si hay project_id
         if project_id:
-            sql += " WHERE dc.project_id = %s"
+            sql += " WHERE ranked.project_id = %s"
             params.append(project_id)
         
         # Agregar ORDER BY y LIMIT
