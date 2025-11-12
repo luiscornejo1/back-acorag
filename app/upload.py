@@ -5,6 +5,7 @@ Soporta: PDF, TXT, JSON, DOCX
 import os
 import json
 import tempfile
+import uuid
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import hashlib
@@ -157,12 +158,9 @@ class DocumentUploader:
             if metadata is None:
                 metadata = {}
             
-            metadata.update({
-                "filename": filename,
-                "file_type": file_type,
-                "upload_date": datetime.now().isoformat(),
-                "text_length": len(text),
-            })
+            project_id = metadata.get("project_id", "UPLOADED")
+            doc_type = metadata.get("doc_type", "documento")
+            title = metadata.get("title", filename.rsplit('.', 1)[0])
             
             # 4. Conectar a la base de datos
             conn = get_db_connection()
@@ -176,15 +174,23 @@ class DocumentUploader:
             if cursor.fetchone():
                 raise ValueError(f"El documento ya existe en la base de datos (ID: {doc_id})")
             
-            # 6. Insertar documento
+            # 6. Insertar documento usando el schema correcto
             print(f"💾 Guardando documento en la base de datos...")
             cursor.execute("""
-                INSERT INTO documents (document_id, metadata, created_at)
-                VALUES (%s, %s, NOW())
-                RETURNING id
-            """, (doc_id, json.dumps(metadata)))
-            
-            db_doc_id = cursor.fetchone()[0]
+                INSERT INTO documents (
+                    document_id, project_id, title, filename, 
+                    file_type, doc_type, date_modified, raw
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)
+            """, (
+                doc_id,
+                project_id,
+                title,
+                filename,
+                file_type,
+                doc_type,
+                json.dumps(metadata)
+            ))
             
             # 7. Dividir en chunks
             print(f"✂️  Dividiendo texto en chunks...")
@@ -196,23 +202,23 @@ class DocumentUploader:
             for idx, chunk in enumerate(chunks):
                 # Generar embedding
                 embedding = self.model.encode(chunk).tolist()
+                embedding_str = '[' + ','.join(str(float(x)) for x in embedding) + ']'
                 
-                # Insertar chunk
+                # Insertar chunk usando el schema correcto (chunk_id debe ser UUID)
+                chunk_id = str(uuid.uuid4())
                 cursor.execute("""
                     INSERT INTO document_chunks (
-                        document_id,
-                        chunk_index,
-                        content,
-                        embedding,
-                        metadata
+                        chunk_id, document_id, project_id, 
+                        title, content, embedding, date_modified
                     )
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s::vector, NOW())
                 """, (
-                    db_doc_id,
-                    idx,
+                    chunk_id,
+                    doc_id,
+                    project_id,
+                    title,
                     chunk,
-                    embedding,
-                    json.dumps({"chunk_length": len(chunk)})
+                    embedding_str
                 ))
             
             # 9. Commit
@@ -225,11 +231,11 @@ class DocumentUploader:
             return {
                 "success": True,
                 "document_id": doc_id,
-                "db_id": db_doc_id,
                 "filename": filename,
                 "chunks_created": len(chunks),
                 "text_length": len(text),
-                "metadata": metadata
+                "project_id": project_id,
+                "title": title
             }
         
         except Exception as e:
