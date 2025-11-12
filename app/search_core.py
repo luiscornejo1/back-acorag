@@ -44,7 +44,7 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         
         # Construir WHERE clause para el CTE si hay project_id
         where_clause = ""
-        params = [query, query, query]
+        params = [query, query, query]  # 3 queries para text search
         
         if project_id:
             where_clause = " WHERE dc.project_id = %s"
@@ -71,7 +71,7 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
               ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 3.0 +
               ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 2.0 +
               ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
-            ) AS raw_text_score
+            ) AS text_score_raw
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
           {where_clause}
@@ -91,15 +91,15 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           vector_score,
           -- Normalizar text_score (0-1 range)
           CASE 
-            WHEN MAX(raw_text_score) OVER () > 0 
-            THEN raw_text_score / NULLIF(MAX(raw_text_score) OVER (), 0)
+            WHEN MAX(text_score_raw) OVER () > 0 
+            THEN text_score_raw / NULLIF(MAX(text_score_raw) OVER (), 0)
             ELSE 0 
           END AS text_score,
           -- Score combinado: 70% vector + 30% texto normalizado
           (vector_score * 0.70) + 
           (CASE 
-            WHEN MAX(raw_text_score) OVER () > 0 
-            THEN raw_text_score / NULLIF(MAX(raw_text_score) OVER (), 0)
+            WHEN MAX(text_score_raw) OVER () > 0 
+            THEN text_score_raw / NULLIF(MAX(text_score_raw) OVER (), 0)
             ELSE 0 
           END * 0.30) AS score
         FROM ranked
