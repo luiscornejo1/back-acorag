@@ -42,6 +42,14 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         # USAR F-STRING PARA EMBEDDING (evita problemas con psycopg2 y ::vector)
         # Solo pasar como parámetros las búsquedas de texto
         
+        # Construir WHERE clause para el CTE si hay project_id
+        where_clause = ""
+        params = [query, query, query]
+        
+        if project_id:
+            where_clause = " WHERE dc.project_id = %s"
+            params.append(project_id)
+        
         sql = f"""
         WITH ranked AS (
           SELECT
@@ -66,6 +74,7 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
             ) AS raw_text_score
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
+          {where_clause}
         )
         SELECT
           document_id,
@@ -94,18 +103,11 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
             ELSE 0 
           END * 0.30) AS score
         FROM ranked
+        ORDER BY score DESC 
+        LIMIT %s
         """
         
-        # Parámetros: solo 3 veces query (para text search en CTE)
-        params = [query, query, query]
-        
-        # Agregar WHERE si hay project_id
-        if project_id:
-            sql += " WHERE ranked.project_id = %s"
-            params.append(project_id)
-        
-        # Agregar ORDER BY y LIMIT
-        sql += " ORDER BY score DESC LIMIT %s"
+        # Agregar top_k al final
         params.append(top_k)
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
