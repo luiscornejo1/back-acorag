@@ -36,20 +36,15 @@ def encode_vec_str(text: str) -> str:
 def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes: int = 10):
     try:
         logger.info(f"🔍 Búsqueda: query='{query}', project_id={project_id}, top_k={top_k}")
-        query_embedding = encode_vec_str(query)
-        logger.info(f"✅ Embedding generado: {len(query_embedding)} chars")
         
-        # Construir parámetros según si hay project_id o no
-        params = []
+        # Generar embedding
+        model = get_model()
+        query_vec = model.encode([query], normalize_embeddings=True, convert_to_numpy=True)[0]
+        query_embedding_str = '[' + ','.join(str(float(x)) for x in query_vec) + ']'
+        logger.info(f"✅ Embedding generado: {len(query_embedding_str)} chars")
         
-        # Primero los 6 parámetros de query para text search
-        params.extend([query] * 6)
-        
-        # Luego project_id si existe (pero DESPUÉS del SQL para mantener orden correcto)
-        
-        # Búsqueda híbrida: vectorial + texto (para mejorar precisión)
-        # Usamos format() para el vector porque es un string, y %s para el resto
-        sql = f"""
+        # Construir SQL sin f-string para el embedding
+        sql = """
         SELECT
           dc.document_id,
           d.title,
@@ -60,15 +55,15 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           COALESCE(d.filename, '') AS filename,
           d.date_modified,
           dc.content AS snippet,
-          (dc.embedding <=> '{query_embedding}') AS vector_score,
+          (dc.embedding <=> %s::vector) AS vector_score,
           -- Búsqueda de texto con boost por campo
           (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +  -- Título 2x peso
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +  -- Número 1.5x peso
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0   -- Contenido 1x peso
+            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
+            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
           ) AS text_score,
           -- Score combinado (60% vectorial + 40% texto con boost)
-          (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
+          (1 - (dc.embedding <=> %s::vector)) * 0.6 + 
           (
             ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
             ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 1.5 +
@@ -77,6 +72,9 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         FROM document_chunks dc
         JOIN documents d ON d.document_id = dc.document_id
         """
+        
+        # Construir parámetros: 2 embeddings + 6 queries
+        params = [query_embedding_str, query, query, query, query_embedding_str, query, query, query]
         
         # Agregar WHERE clause si hay project_id
         if project_id:
