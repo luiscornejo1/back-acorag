@@ -39,8 +39,21 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         query_embedding = encode_vec_str(query)
         logger.info(f"✅ Embedding generado: {len(query_embedding)} chars")
         
-        # Construir WHERE clause dinámicamente
-        where_clause = "WHERE dc.project_id = %s" if project_id else ""
+        # Construir parámetros según si hay project_id o no
+        params = []
+        
+        # Primero los 6 parámetros de query para text search
+        params.extend([query] * 6)
+        
+        # Luego project_id si existe
+        if project_id:
+            params.append(project_id)
+            where_clause = "WHERE dc.project_id = %s"
+        else:
+            where_clause = ""
+        
+        # Finalmente top_k para LIMIT
+        params.append(top_k)
         
         # Búsqueda híbrida: vectorial + texto (para mejorar precisión)
         # Usamos format() para el vector porque es un string, y %s para el resto
@@ -75,8 +88,6 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         ORDER BY score DESC
         LIMIT %s;
         """
-        # Ahora pasamos query 6 veces (para cada campo de texto)
-        params = [query, query, query, query, query, query] + ([project_id] if project_id else []) + [top_k]
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
