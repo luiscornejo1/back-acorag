@@ -131,7 +131,8 @@ class DocumentUploader:
         file_path: str,
         filename: str,
         file_type: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        raw_content: Optional[bytes] = None
     ) -> Dict[str, Any]:
         """
         Ingesta un documento completo:
@@ -140,11 +141,23 @@ class DocumentUploader:
         3. Genera embeddings
         4. Guarda en PostgreSQL
         
+        Args:
+            file_path: Ruta temporal del archivo
+            filename: Nombre del archivo original
+            file_type: Tipo (pdf, txt, docx, json)
+            metadata: Metadatos opcionales
+            raw_content: Contenido binario del archivo original (para poder servirlo después)
+        
         Returns:
             Dict con información del documento ingestado
         """
         try:
-            # 1. Extraer texto
+            # 1. Leer contenido binario si no se proporcionó
+            if raw_content is None:
+                with open(file_path, 'rb') as f:
+                    raw_content = f.read()
+            
+            # 2. Extraer texto
             print(f"📄 Extrayendo texto de {filename}...")
             text = self.extract_text(file_path, file_type)
             
@@ -189,7 +202,7 @@ class DocumentUploader:
                 filename,
                 file_type,
                 doc_type,
-                json.dumps(metadata)
+                raw_content  # ← GUARDAR CONTENIDO BINARIO, no metadata
             ))
             
             # 7. Dividir en chunks
@@ -274,7 +287,13 @@ def upload_and_ingest(
     try:
         # Ingestar
         uploader = DocumentUploader()
-        result = uploader.ingest_document(tmp_path, filename, file_ext, metadata)
+        result = uploader.ingest_document(
+            tmp_path, 
+            filename, 
+            file_ext, 
+            metadata,
+            raw_content=file_content  # ← Pasar contenido binario original
+        )
         return result
     finally:
         # Limpiar archivo temporal
