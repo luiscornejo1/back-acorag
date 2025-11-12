@@ -45,15 +45,7 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         # Primero los 6 parámetros de query para text search
         params.extend([query] * 6)
         
-        # Luego project_id si existe
-        if project_id:
-            params.append(project_id)
-            where_clause = "WHERE dc.project_id = %s"
-        else:
-            where_clause = ""
-        
-        # Finalmente top_k para LIMIT
-        params.append(top_k)
+        # Luego project_id si existe (pero DESPUÉS del SQL para mantener orden correcto)
         
         # Búsqueda híbrida: vectorial + texto (para mejorar precisión)
         # Usamos format() para el vector porque es un string, y %s para el resto
@@ -84,10 +76,16 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           ) * 0.4 AS score
         FROM document_chunks dc
         JOIN documents d ON d.document_id = dc.document_id
-        {where_clause}
-        ORDER BY score DESC
-        LIMIT %s;
         """
+        
+        # Agregar WHERE clause si hay project_id
+        if project_id:
+            sql += " WHERE dc.project_id = %s"
+            params.append(project_id)
+        
+        # Agregar ORDER BY y LIMIT
+        sql += " ORDER BY score DESC LIMIT %s;"
+        params.append(top_k)
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
