@@ -35,7 +35,7 @@ def encode_vec_str(text: str) -> str:
 
 def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes: int = 10):
     try:
-        logger.info(f"🔍 Búsqueda: query='{query}', project_id={project_id}, top_k={top_k}")
+        logger.info(f"🔍 [v2.0-FIX] Búsqueda: query='{query}', project_id={project_id}, top_k={top_k}")
         query_embedding = encode_vec_str(query)
         logger.info(f"✅ Embedding generado: {len(query_embedding)} chars")
         
@@ -111,6 +111,8 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         params.append(top_k)
         
         logger.info(f"📊 Ejecutando SQL con {len(params)} parámetros")
+        logger.info(f"🔧 Params: {params}")
+        logger.info(f"📝 SQL placeholders count: {sql.count('%s')}")
         
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"SET LOCAL ivfflat.probes = {probes};")
