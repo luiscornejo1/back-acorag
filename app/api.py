@@ -438,7 +438,7 @@ def get_document_file(document_id: str):
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT filename, file_type, raw 
+                    SELECT filename, file_type, file_content 
                     FROM documents 
                     WHERE document_id = %s
                 """, (document_id,))
@@ -447,7 +447,7 @@ def get_document_file(document_id: str):
         if not result:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         
-        filename, file_type, raw_content = result
+        filename, file_type, file_content = result
         
         # Opción 1: Servir desde disco si existe
         if filename:
@@ -460,8 +460,8 @@ def get_document_file(document_id: str):
                     filename=filename
                 )
         
-        # Opción 2: Servir contenido raw desde BD
-        if raw_content:
+        # Opción 2: Servir contenido file_content desde BD
+        if file_content:
             media_type = {
                 "pdf": "application/pdf",
                 "txt": "text/plain",
@@ -470,7 +470,7 @@ def get_document_file(document_id: str):
             }.get(file_type, "application/octet-stream")
             
             return Response(
-                content=raw_content if isinstance(raw_content, bytes) else raw_content.encode(),
+                content=file_content if isinstance(file_content, bytes) else file_content.encode(),
                 media_type=media_type,
                 headers={
                     "Content-Disposition": f"inline; filename={filename or f'documento_{document_id}.{file_type}'}"

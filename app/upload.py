@@ -192,7 +192,7 @@ class DocumentUploader:
             cursor.execute("""
                 INSERT INTO documents (
                     document_id, project_id, title, filename, 
-                    file_type, doc_type, date_modified, raw
+                    file_type, doc_type, date_modified, file_content
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)
             """, (
@@ -202,7 +202,7 @@ class DocumentUploader:
                 filename,
                 file_type,
                 doc_type,
-                raw_content  # ← GUARDAR CONTENIDO BINARIO, no metadata
+                raw_content  # ← GUARDAR EN file_content (bytea), no en raw (jsonb)
             ))
             
             # 7. Dividir en chunks
