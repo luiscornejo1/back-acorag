@@ -33,9 +33,14 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
     probes: int = Field(default=10, ge=1, le=100)
 
+class ChatMessage(BaseModel):
+    role: str  # 'user' o 'assistant'
+    content: str
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1)
     max_context_docs: int = Field(default=15, ge=1, le=50)
+    history: List[ChatMessage] = Field(default_factory=list)  # Historial de conversación
 
 class ChatResponse(BaseModel):
     question: str
@@ -97,14 +102,17 @@ def chat(req: ChatRequest) -> ChatResponse:
             probes=10,
         )
         
-        # FILTRO DE RELEVANCIA: Solo usar documentos con score > 0.05
-        relevant_rows = [r for r in rows if r.get('score', 0) > 0.05]
+        # FILTRO DE RELEVANCIA mejorado
+        relevant_rows = [r for r in rows if r.get('score', 0) > 0.20]
+        
+        # Detectar preguntas trampa (score muy bajo)
+        max_score = max((r.get('score', 0) for r in rows), default=0)
         
         # Si no hay documentos relevantes, responder directamente
-        if not relevant_rows:
+        if not relevant_rows or max_score < 0.25:
             return ChatResponse(
                 question=req.question,
-                answer="❌ No encontré documentos relevantes para responder tu pregunta. Esta pregunta podría no estar relacionada con los documentos de construcción disponibles. ¿Puedo ayudarte con información sobre proyectos, cronogramas, especificaciones técnicas o documentos de construcción?",
+                answer="❌ No encuentro información relevante sobre este tema en la documentación técnica disponible. Los documentos que tengo son sobre proyectos de construcción, arquitectura, cronogramas y especificaciones técnicas. ¿Puedo ayudarte con información relacionada a estos temas?",
                 sources=[],
                 context_used="",
                 session_id=str(uuid.uuid4())
@@ -119,14 +127,15 @@ def chat(req: ChatRequest) -> ChatResponse:
             category = row.get('category', '')
             score = row.get('score', 0)
             
+            # Formato más limpio para el LLM
             context_parts.append(
-                f"[Documento {i}] (Relevancia: {score:.3f})\n"
+                f"📄 Documento {i} (Relevancia: {score:.1%})\n"
                 f"Título: {title}\n"
                 f"Número: {number}\n"
                 f"Categoría: {category}\n"
-                f"Contenido: {snippet}\n"
+                f"Contenido:\n{snippet}\n"
             )
-        context = "\n---\n".join(context_parts)
+        context = "\n" + ("="*80) + "\n".join(context_parts)
         
         # Generar respuesta inteligente con Groq
         import os
@@ -134,7 +143,7 @@ def chat(req: ChatRequest) -> ChatResponse:
         groq_key = os.environ.get("GROQ_API_KEY")
         
         print(f"[DEBUG] GROQ_API_KEY presente: {bool(groq_key)}", file=sys.stderr)
-        print(f"[DEBUG] Longitud de key: {len(groq_key) if groq_key else 0}", file=sys.stderr)
+        print(f"[DEBUG] Documentos relevantes: {len(relevant_rows)}, Max score: {max_score:.3f}", file=sys.stderr)
         
         if groq_key:
             try:
@@ -144,53 +153,53 @@ def chat(req: ChatRequest) -> ChatResponse:
                 client = Groq(api_key=groq_key)
                 print(f"[DEBUG] Cliente Groq creado", file=sys.stderr)
                 
-                system_prompt = """Eres un asistente experto en documentos de construcción y arquitectura. Tu trabajo es buscar información EXCLUSIVAMENTE en los documentos proporcionados.
+                system_prompt = """Eres un asistente experto en documentación técnica de construcción. Analizas documentos y das respuestas precisas, integradas y naturales.
 
-REGLAS ESTRICTAS - NO NEGOCIABLES:
-1. ❌ NUNCA inventes información que no esté en los documentos
-2. ❌ NUNCA uses conocimiento general o externo
-3. ❌ NUNCA asumas o extrapoles datos que no estén explícitos
-4. ✅ Si la información NO está en los documentos, responde EXACTAMENTE:
-   "❌ No encontré información sobre [tema] en los documentos disponibles. Los documentos que revisé tratan sobre [temas que sí están]."
-5. ✅ Si la pregunta NO tiene relación con los documentos, responde:
-   "❌ Esta pregunta no está relacionada con los documentos de construcción disponibles. ¿Puedo ayudarte con información sobre los proyectos, cronogramas, especificaciones técnicas o documentos de construcción?"
+REGLAS:
+1. USA SOLO información explícita de los documentos
+2. Si no hay info, admítelo claramente
+3. Para preguntas irrelevantes (ej: Michael Jackson en docs de construcción): "No encuentro información sobre [tema] en estos documentos técnicos"
 
-CUANDO SÍ HAY INFORMACIÓN:
-- Cita SIEMPRE el número de documento y título exacto
-- Usa comillas para citas textuales del documento
-- Menciona la categoría y fecha si están disponibles
-- Si hay múltiples documentos, menciónalos todos
-- Sé específico con números, fechas y nombres propios
+ESTILO DE RESPUESTA:
+- INTEGRADO: "Según la documentación del proyecto X, [síntesis]..." 
+- NO enumeres: "Documento 1, Documento 2, Documento 3..."
+- Cita fuentes al final: "📄 [Título] ([Número])"
 
-FORMATO DE RESPUESTA:
-📄 Respuesta directa y precisa
-📋 Fuentes: [Documento #] - Título - Número
-⚠️ Si falta información, indícalo claramente
+ESTRUCTURA:
+1. Respuesta directa (1-2 frases)
+2. Detalles relevantes
+3. Referencias de fuentes
 
-Responde en español de forma profesional, concisa y exacta."""
+EJEMPLO BUENO:
+"El Plan Maestro de Arquitectura (200076-CCC02-PL-AR-000400) presenta el diseño conceptual del proyecto educativo, incluyendo distribución de aulas, áreas comunes y especificaciones técnicas para construcción sismo-resistente."
+
+EJEMPLO MALO:
+"Documento 1 habla de arquitectura. Documento 2 menciona planos..."
+"""
                 
+                # Construir mensajes con historial
+                messages = [{"role": "system", "content": system_prompt}]
+                
+                # Agregar historial de conversación (últimos 10 mensajes para no saturar)
+                for msg in req.history[-10:]:
+                    messages.append({"role": msg.role, "content": msg.content})
+                
+                # Agregar pregunta actual con contexto
                 user_prompt = f"""Pregunta: {req.question}
 
-DOCUMENTOS PARA ANALIZAR:
+DOCUMENTOS DISPONIBLES:
 {context}
 
-INSTRUCCIONES:
-1. Lee cuidadosamente todos los documentos
-2. Si la respuesta está en los documentos, responde con citas específicas
-3. Si NO está en los documentos, di claramente que no hay información
-4. Si la pregunta no tiene relación con construcción/arquitectura, indícalo
-
-Respuesta:"""
+Analiza los documentos y responde de forma integrada y natural."""
+                
+                messages.append({"role": "user", "content": user_prompt})
                 
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",  # Modelo más potente de Groq
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.1,  # Más bajo = más determinista y menos creativo
+                    model="llama-3.3-70b-versatile",
+                    messages=messages,
+                    temperature=0.1,
                     max_tokens=1200,
-                    top_p=0.9  # Reduce aleatoriedad
+                    top_p=0.9
                 )
                 print(f"[DEBUG] Respuesta recibida de Groq", file=sys.stderr)
                 answer = response.choices[0].message.content
@@ -213,9 +222,9 @@ Respuesta:"""
         return ChatResponse(
             question=req.question,
             answer=answer,
-            sources=relevant_rows,  # Solo documentos relevantes
+            sources=relevant_rows,
             context_used=context,
-            session_id=str(uuid.uuid4())  # ID único para feedback
+            session_id=str(uuid.uuid4())
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
