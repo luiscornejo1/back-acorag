@@ -49,9 +49,10 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         else:
             where_filter = "WHERE"
         
-        # SQL directo sin CTE - más simple y menos propenso a errores
+        # SQL con agrupación por documento para evitar duplicados
+        # Usa DISTINCT ON para mantener solo el chunk más relevante de cada documento
         sql = f"""
-        SELECT
+        SELECT DISTINCT ON (dc.document_id)
           dc.document_id,
           dc.project_id,
           d.title,
@@ -78,7 +79,7 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         FROM document_chunks dc
         JOIN documents d ON d.document_id = dc.document_id
         {where_filter} 1=1
-        ORDER BY score DESC
+        ORDER BY dc.document_id, score DESC
         LIMIT %s
         """
         
