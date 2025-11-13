@@ -65,24 +65,32 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         )
         
         # THRESHOLD ADAPTATIVO PARA MEJOR PRECISIÓN
-        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.4
-        # - Si no, usar threshold 0.25 (permitir resultados medianos)
-        # - Siempre descartar score < 0.25 (muy irrelevantes)
+        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.45
+        # - Si hay resultados con score > 0.4, usar threshold 0.35
+        # - Si no hay nada relevante (max < 0.35), devolver lista vacía
+        # - NUNCA mostrar resultados con score < 0.35 (evita coincidencias irrelevantes)
         
         if not rows:
             return []
         
         max_score = max(r.get('score', 0) for r in rows)
         
-        # Threshold dinámico basado en el mejor resultado
+        # Threshold estricto para evitar resultados irrelevantes (como "michael jackson")
         if max_score >= 0.5:
-            threshold = 0.40  # Alta precisión: solo resultados muy relevantes
-        elif max_score >= 0.35:
-            threshold = 0.30  # Precisión media: resultados relevantes
+            threshold = 0.45  # Alta precisión: solo resultados muy relevantes
+        elif max_score >= 0.40:
+            threshold = 0.35  # Precisión media: resultados relevantes
         else:
-            threshold = 0.25  # Permitir resultados medianos si no hay mejores
+            # Si el mejor resultado tiene score < 0.40, probablemente no hay nada relevante
+            threshold = 0.40  # Threshold alto que no pasará ningún resultado
+            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.40")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
+        
+        # Si después del filtro no hay resultados, devolver vacío
+        if not filtered_rows:
+            logger.info(f"🚫 Todos los resultados filtrados. Max score: {max_score:.3f}, Threshold: {threshold:.2f}")
+            return []
         
         # Log para debugging
         logger.info(f"📊 Max score: {max_score:.3f}, Threshold usado: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
