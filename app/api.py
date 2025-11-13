@@ -10,7 +10,8 @@ import os
 
 from .search_core import semantic_search, get_conn
 
-# Version: Scores optimizados con balance 50/50 y embeddings consistentes
+# Version: v4.0 - PESOS EXTREMOS x20 para título - FORZAR REDEPLOY
+# Fecha: 2025-11-13 04:00 AM
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
 
@@ -82,38 +83,24 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             score = row.get('score', 0)
             logger.info(f"  {i}. Score: {score:.4f} - {title}...")
         
-        # Threshold más permisivo para permitir búsquedas de documentos reales
+        # Threshold MÍNIMO para permitir búsquedas - Filtrado manual por usuario
         if max_score >= 0.5:
-            threshold = 0.25  # Bajado de 0.35 - Alta confianza
+            threshold = 0.10  # Muy permisivo
         elif max_score >= 0.35:
-            threshold = 0.15  # Bajado de 0.20 - Confianza media
+            threshold = 0.08  # Súper permisivo
         elif max_score >= 0.25:
-            threshold = 0.10  # Bajado de 0.15 - Confianza baja
+            threshold = 0.05  # Ultra permisivo
         else:
-            # Si el mejor resultado < 0.25, probablemente es basura (ej: "michael jackson")
-            threshold = 0.20  # Bajado de 0.25 - Threshold que no pasará ningún resultado
-            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.25")
+            threshold = 0.03  # Casi sin filtro
+            logger.info(f"⚠️  Búsqueda con scores bajos. Max score: {max_score:.3f}")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
         
         # LOG para debug: Mostrar cuántos resultados pasaron el filtro
         logger.info(f"🔍 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
         
-        # FILTRO LÉXICO MEJORADO: Detectar búsquedas irrelevantes
-        # Verificar si hay coincidencias reales de palabras en los documentos
-        if len(filtered_rows) >= 3:
-            top_3_text_scores = [r.get('text_score', 0) for r in filtered_rows[:3]]
-            avg_text_score = sum(top_3_text_scores) / len(top_3_text_scores)
-            
-            # Si el promedio de text_score es muy bajo (<0.05), probablemente no hay coincidencias léxicas reales
-            if avg_text_score < 0.05:
-                logger.info(f"🚫 Filtro léxico: Promedio text_score muy bajo ({avg_text_score:.4f}). Búsqueda irrelevante.")
-                return []
-        
-        # FILTRO ADICIONAL: Si max_score es bajo pero hay muchos resultados, probablemente es basura
-        if max_score < 0.30 and len(filtered_rows) > 20:
-            logger.info(f"🚫 Filtro de dispersión: Score bajo ({max_score:.3f}) con muchos resultados ({len(filtered_rows)}). Probablemente basura.")
-            return []
+        # FILTRO DESACTIVADO TEMPORALMENTE - Causaba falsos positivos
+        # TODO: Mejorar filtro léxico para no bloquear búsquedas válidas
         
         # Si después del filtro no hay resultados, devolver vacío
         if not filtered_rows:
