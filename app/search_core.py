@@ -66,16 +66,27 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           dc.content AS snippet,
           (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
           (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 3.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
+            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
+          ) AS text_score_raw,
+          LEAST(
+            (
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
+            ) / 0.1,
+            1.0
           ) AS text_score,
-          (1 - (dc.embedding <=> '{query_embedding}')) * 0.7 + 
-          (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 3.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 1.0
-          ) * 0.3 AS score
+          (1 - (dc.embedding <=> '{query_embedding}')) * 0.5 + 
+          LEAST(
+            (
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
+            ) / 0.1,
+            1.0
+          ) * 0.5 AS score
         FROM document_chunks dc
         JOIN documents d ON d.document_id = dc.document_id
         {where_filter} 1=1
@@ -83,10 +94,10 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         LIMIT %s
         """
         
-        # Agregar parámetros: 6 queries (3 para text_score + 3 para score) + top_k
-        params.extend([query, query, query, query, query, query, top_k])
+        # Agregar parámetros: 9 queries (3 para text_score_raw + 3 para text_score + 3 para score) + top_k
+        params.extend([query, query, query, query, query, query, query, query, query, top_k])
         
-        logger.info(f"� SQL ready - params count: {len(params)}")
+        logger.info(f"🔍 SQL ready - params count: {len(params)}")
         
         with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"SET LOCAL ivfflat.probes = {probes};")

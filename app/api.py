@@ -82,14 +82,14 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         
         # Threshold más permisivo para permitir búsquedas de documentos reales
         if max_score >= 0.5:
-            threshold = 0.40  # Alta confianza: solo muy relevantes
+            threshold = 0.35  # Bajado de 0.40 - Alta confianza
         elif max_score >= 0.35:
-            threshold = 0.25  # Confianza media: resultados relevantes
+            threshold = 0.20  # Bajado de 0.25 - Confianza media
         elif max_score >= 0.25:
-            threshold = 0.20  # Confianza baja: permitir resultados potencialmente útiles
+            threshold = 0.15  # Bajado de 0.20 - Confianza baja
         else:
             # Si el mejor resultado < 0.25, probablemente es basura (ej: "michael jackson")
-            threshold = 0.30  # Threshold que no pasará ningún resultado
+            threshold = 0.25  # Bajado de 0.30 - Threshold que no pasará ningún resultado
             logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.25")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
