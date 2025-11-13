@@ -10,10 +10,10 @@ import os
 
 from .search_core import semantic_search, get_conn
 
-# Version: v5.0 - FIX CRITICAL: ROW_NUMBER para ordenar por relevancia (no por document_id)
-# Fecha: 2025-11-13 05:30 AM
-# Cambio: Reemplazado DISTINCT ON por ROW_NUMBER() + ORDER BY score DESC
-# Motivo: DISTINCT ON + ORDER BY document_id causaba que LIMIT cortara por ID alfabético, no por score
+# Version: v5.1 - Threshold inteligente dinámico (50% del max score)
+# Fecha: 2025-11-13 05:45 AM
+# Cambio: Threshold = max(max_score * 0.5, 0.15) + límite 20 resultados
+# Motivo: Filtrar resultados irrelevantes manteniendo los verdaderamente relevantes
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
 
@@ -85,13 +85,34 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             score = row.get('score', 0)
             logger.info(f"  {i}. Score: {score:.4f} - {title}...")
         
-        # SIN THRESHOLD - Devolver todos los resultados
-        logger.info(f"✅ Devolviendo TODOS los {len(rows)} resultados sin filtrar")
+        # FILTRO INTELIGENTE DE RELEVANCIA
+        # 1. Threshold dinámico: 50% del score máximo (evita resultados muy malos)
+        min_threshold = max_score * 0.5
         
-        filtered_rows = rows  # SIN FILTRO
+        # 2. Threshold absoluto mínimo: 0.15 (para queries muy genéricas)
+        absolute_min = 0.15
+        
+        # Usar el mayor de los dos thresholds
+        threshold = max(min_threshold, absolute_min)
+        
+        logger.info(f"🎯 Threshold inteligente: {threshold:.3f} (max_score={max_score:.3f} * 0.5 vs min={absolute_min})")
+        
+        # Filtrar por threshold
+        filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
+        
+        logger.info(f"📊 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
+        
+        # 3. Si quedan muy pocos resultados (<3), bajar threshold un poco
+        if len(filtered_rows) < 3 and len(rows) >= 3:
+            threshold = max_score * 0.35  # Más permisivo
+            filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
+            logger.info(f"⚡ Threshold ajustado a {threshold:.3f} para tener al menos 3 resultados ({len(filtered_rows)} obtenidos)")
+        
+        # 4. Limitar a top 20 para no saturar (incluso si pasan el threshold)
+        filtered_rows = filtered_rows[:20]
         
         # Log para debugging
-        logger.info(f"📊 Max score: {max_score:.3f}, Resultados devueltos: {len(filtered_rows)}")
+        logger.info(f"📊 Max score: {max_score:.3f}, Threshold: {threshold:.2f}, Resultados: {len(filtered_rows)}")
         
         return filtered_rows
     except Exception as e:
