@@ -9,6 +9,8 @@ import logging
 import os
 
 from .search_core import semantic_search, get_conn
+
+# Version: Scores optimizados con balance 50/50 y embeddings consistentes
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
 
