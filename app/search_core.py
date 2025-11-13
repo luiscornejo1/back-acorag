@@ -66,14 +66,14 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           dc.content AS snippet,
           (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
           (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 10.0 +
+            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 5.0 +
             ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
           ) AS text_score_raw,
           LEAST(
             (
-              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
-              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 10.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 5.0 +
               ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
             ) / 0.1,
             1.0
@@ -81,8 +81,8 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
           (1 - (dc.embedding <=> '{query_embedding}')) * 0.5 + 
           LEAST(
             (
-              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 5.0 +
-              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 3.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 10.0 +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) * 5.0 +
               ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s)) * 2.0
             ) / 0.1,
             1.0
