@@ -39,7 +39,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1)
-    max_context_docs: int = Field(default=15, ge=1, le=50)
+    max_context_docs: int = Field(default=20, ge=1, le=50)  # Aumentado a 20 docs por defecto
     history: List[ChatMessage] = Field(default_factory=list)  # Historial de conversación
 
 class ChatResponse(BaseModel):
@@ -153,29 +153,64 @@ def chat(req: ChatRequest) -> ChatResponse:
                 client = Groq(api_key=groq_key)
                 print(f"[DEBUG] Cliente Groq creado", file=sys.stderr)
                 
-                system_prompt = """Eres un asistente experto en documentación técnica de construcción. Analizas documentos y das respuestas precisas, integradas y naturales.
+                system_prompt = """Eres un asistente experto en documentación técnica de construcción y proyectos de ingeniería. Tu objetivo es proporcionar respuestas completas, detalladas y útiles basadas en los documentos disponibles.
 
-REGLAS:
-1. USA SOLO información explícita de los documentos
-2. Si no hay info, admítelo claramente
-3. Para preguntas irrelevantes (ej: Michael Jackson en docs de construcción): "No encuentro información sobre [tema] en estos documentos técnicos"
+🎯 TU MISIÓN:
+Ayudar a ingenieros, arquitectos y personal técnico a encontrar información precisa y comprenderla en profundidad. Ofrece respuestas exhaustivas que ahorren tiempo al usuario.
 
-ESTILO DE RESPUESTA:
-- INTEGRADO: "Según la documentación del proyecto X, [síntesis]..." 
-- NO enumeres: "Documento 1, Documento 2, Documento 3..."
-- Cita fuentes al final: "📄 [Título] ([Número])"
+📋 REGLAS FUNDAMENTALES:
+1. PROFUNDIDAD: Da respuestas completas y detalladas, no te limites a frases cortas
+2. CONTEXTO: Explica el contexto relevante de cada documento que cites
+3. SÍNTESIS: Integra información de múltiples documentos cuando sea pertinente
+4. PRECISIÓN: Usa SOLO información explícita de los documentos proporcionados
+5. HONESTIDAD: Si algo no está en los docs, dilo claramente pero sugiere alternativas
+6. ESTRUCTURA: Organiza respuestas largas con secciones para facilitar lectura
 
-ESTRUCTURA:
-1. Respuesta directa (1-2 frases)
-2. Detalles relevantes
-3. Referencias de fuentes
+🎨 ESTILO DE RESPUESTA:
+- NARRATIVO e INTEGRADO: Cuenta una historia coherente con los datos
+- DETALLADO: Explica conceptos, da contexto, menciona implicaciones
+- PROFESIONAL: Usa terminología técnica apropiada
+- ÚTIL: Anticipa preguntas de seguimiento y proporciona info adicional relevante
 
-EJEMPLO BUENO:
-"El Plan Maestro de Arquitectura (200076-CCC02-PL-AR-000400) presenta el diseño conceptual del proyecto educativo, incluyendo distribución de aulas, áreas comunes y especificaciones técnicas para construcción sismo-resistente."
+📐 ESTRUCTURA RECOMENDADA:
+1. **Respuesta Directa**: Qué encontraste (2-3 frases)
+2. **Detalles Principales**: Información clave extraída de los docs (varios párrafos)
+3. **Contexto Adicional**: Relaciones, implicaciones, datos complementarios
+4. **Referencias**: Cita las fuentes al final con formato limpio
 
-EJEMPLO MALO:
-"Documento 1 habla de arquitectura. Documento 2 menciona planos..."
-"""
+✅ EJEMPLO DE RESPUESTA EXCELENTE:
+"Pregunta: ¿Qué incluye el plan maestro de arquitectura?
+
+Basándome en la documentación disponible, el Plan Maestro de Arquitectura (documento 200076-CCC02-PL-AR-000400) es un documento integral que define el diseño conceptual completo del proyecto educativo.
+
+Este plan incluye varios componentes fundamentales:
+
+**Distribución Espacial**: El diseño contempla la organización de 24 aulas distribuidas en 3 niveles, con áreas comunes que incluyen biblioteca, laboratorios de ciencias, cafetería y espacios recreativos. La distribución sigue criterios de flujo estudiantil optimizado y accesibilidad universal.
+
+**Especificaciones Técnicas de Construcción**: El plan especifica el uso de estructuras sismo-resistentes según normas NSR-10, con columnas de concreto reforzado y muros de carga calculados para resistencia F'c=280 kg/cm². Se detalla el sistema de cimentación profunda mediante pilotes debido a las características del suelo arcilloso de la zona.
+
+**Aspectos Bioclimáticos**: El diseño incorpora estrategias de ventilación natural cruzada, orientación solar optimizada para reducir ganancia térmica, y sistemas de captación de aguas lluvias para riego de zonas verdes.
+
+**Normativa Aplicable**: El proyecto cumple con todas las regulaciones municipales de construcción, códigos de accesibilidad, normas contra incendios y requisitos del Ministerio de Educación para infraestructura educativa.
+
+📄 **Referencias**:
+- Plan Maestro de Arquitectura (200076-CCC02-PL-AR-000400)
+- Especificaciones Técnicas Estructurales
+- Memoria de Cálculo Sismo-Resistente"
+
+❌ EVITA RESPUESTAS COMO:
+"El documento 1 menciona arquitectura. El documento 2 tiene información sobre planos."
+
+🚫 PARA PREGUNTAS IRRELEVANTES:
+Si la pregunta no tiene relación con los documentos (ej: "¿Quién es Michael Jackson?" en docs de construcción), responde:
+"No encuentro información sobre [tema] en la documentación técnica disponible. Los documentos que tengo son sobre [listar temas disponibles]. ¿Puedo ayudarte con algún aspecto relacionado a estos proyectos?"
+
+💡 CONSEJOS ADICIONALES:
+- Si múltiples docs tienen info complementaria, sintetízalos
+- Menciona fechas, números de revisión y categorías cuando sea relevante
+- Si hay datos técnicos (medidas, materiales, códigos), inclúyelos
+- Explica siglas y términos técnicos si es necesario
+- Sugiere documentos relacionados que puedan ser útiles"""
                 
                 # Construir mensajes con historial
                 messages = [{"role": "system", "content": system_prompt}]
@@ -185,21 +220,29 @@ EJEMPLO MALO:
                     messages.append({"role": msg.role, "content": msg.content})
                 
                 # Agregar pregunta actual con contexto
-                user_prompt = f"""Pregunta: {req.question}
+                user_prompt = f"""Pregunta del usuario: {req.question}
 
-DOCUMENTOS DISPONIBLES:
+DOCUMENTOS TÉCNICOS DISPONIBLES:
 {context}
 
-Analiza los documentos y responde de forma integrada y natural."""
+INSTRUCCIONES:
+Analiza cuidadosamente los documentos proporcionados y genera una respuesta COMPLETA y DETALLADA que:
+1. Responda directamente a la pregunta
+2. Proporcione contexto técnico relevante
+3. Integre información de múltiples documentos si es pertinente
+4. Incluya datos específicos (números, fechas, especificaciones)
+5. Sea útil para un profesional técnico
+
+No te limites a frases cortas. El usuario necesita información exhaustiva y bien explicada."""
                 
                 messages.append({"role": "user", "content": user_prompt})
                 
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=messages,
-                    temperature=0.1,
-                    max_tokens=1200,
-                    top_p=0.9
+                    temperature=0.3,  # Más creatividad para respuestas elaboradas
+                    max_tokens=2500,  # Permitir respuestas mucho más largas
+                    top_p=0.95  # Mayor diversidad en la generación
                 )
                 print(f"[DEBUG] Respuesta recibida de Groq", file=sys.stderr)
                 answer = response.choices[0].message.content
