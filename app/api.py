@@ -83,20 +83,13 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             score = row.get('score', 0)
             logger.info(f"  {i}. Score: {score:.4f} - {title}...")
         
-        # Threshold simple - Sin filtros complejos
-        threshold = 0.15  # Muy permisivo
+        # SIN THRESHOLD - Devolver todos los resultados
+        logger.info(f"✅ Devolviendo TODOS los {len(rows)} resultados sin filtrar")
         
-        filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
-        
-        logger.info(f"🔍 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
-        
-        # Si después del filtro no hay resultados, devolver vacío
-        if not filtered_rows:
-            logger.info(f"🚫 Todos los resultados filtrados. Max score: {max_score:.3f}, Threshold: {threshold:.2f}")
-            return []
+        filtered_rows = rows  # SIN FILTRO
         
         # Log para debugging
-        logger.info(f"📊 Max score: {max_score:.3f}, Threshold usado: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
+        logger.info(f"📊 Max score: {max_score:.3f}, Resultados devueltos: {len(filtered_rows)}")
         
         return filtered_rows
     except Exception as e:
