@@ -99,13 +99,21 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         # LOG para debug: Mostrar cuántos resultados pasaron el filtro
         logger.info(f"🔍 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
         
-        # FILTRO ADICIONAL: Detectar búsquedas irrelevantes por falta de coincidencia léxica
-        # Si los primeros 3 resultados tienen text_score = 0, probablemente es basura
+        # FILTRO LÉXICO MEJORADO: Detectar búsquedas irrelevantes
+        # Verificar si hay coincidencias reales de palabras en los documentos
         if len(filtered_rows) >= 3:
             top_3_text_scores = [r.get('text_score', 0) for r in filtered_rows[:3]]
-            if all(score == 0 for score in top_3_text_scores):
-                logger.info(f"🚫 Filtro léxico: Top 3 resultados sin coincidencia de texto. Probablemente búsqueda irrelevante.")
+            avg_text_score = sum(top_3_text_scores) / len(top_3_text_scores)
+            
+            # Si el promedio de text_score es muy bajo (<0.05), probablemente no hay coincidencias léxicas reales
+            if avg_text_score < 0.05:
+                logger.info(f"🚫 Filtro léxico: Promedio text_score muy bajo ({avg_text_score:.4f}). Búsqueda irrelevante.")
                 return []
+        
+        # FILTRO ADICIONAL: Si max_score es bajo pero hay muchos resultados, probablemente es basura
+        if max_score < 0.30 and len(filtered_rows) > 20:
+            logger.info(f"🚫 Filtro de dispersión: Score bajo ({max_score:.3f}) con muchos resultados ({len(filtered_rows)}). Probablemente basura.")
+            return []
         
         # Si después del filtro no hay resultados, devolver vacío
         if not filtered_rows:
