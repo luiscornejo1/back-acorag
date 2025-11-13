@@ -65,27 +65,42 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         )
         
         # THRESHOLD ADAPTATIVO PARA MEJOR PRECISIÓN
-        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.45
-        # - Si hay resultados con score > 0.4, usar threshold 0.35
-        # - Si no hay nada relevante (max < 0.35), devolver lista vacía
-        # - NUNCA mostrar resultados con score < 0.35 (evita coincidencias irrelevantes)
+        # - Threshold dinámico basado en el mejor score obtenido
+        # - Filtra resultados muy irrelevantes pero permite documentos reales
         
         if not rows:
             return []
         
         max_score = max(r.get('score', 0) for r in rows)
         
-        # Threshold estricto para evitar resultados irrelevantes (como "michael jackson")
+        # LOG DETALLADO: Mostrar top 5 resultados para análisis
+        logger.info(f"📊 Top 5 resultados de búsqueda:")
+        for i, row in enumerate(rows[:5], 1):
+            title = row.get('title', 'Sin título')[:50]
+            score = row.get('score', 0)
+            logger.info(f"  {i}. Score: {score:.4f} - {title}...")
+        
+        # Threshold más permisivo para permitir búsquedas de documentos reales
         if max_score >= 0.5:
-            threshold = 0.45  # Alta precisión: solo resultados muy relevantes
-        elif max_score >= 0.40:
-            threshold = 0.35  # Precisión media: resultados relevantes
+            threshold = 0.40  # Alta confianza: solo muy relevantes
+        elif max_score >= 0.35:
+            threshold = 0.25  # Confianza media: resultados relevantes
+        elif max_score >= 0.25:
+            threshold = 0.20  # Confianza baja: permitir resultados potencialmente útiles
         else:
-            # Si el mejor resultado tiene score < 0.40, probablemente no hay nada relevante
-            threshold = 0.40  # Threshold alto que no pasará ningún resultado
-            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.40")
+            # Si el mejor resultado < 0.25, probablemente es basura (ej: "michael jackson")
+            threshold = 0.30  # Threshold que no pasará ningún resultado
+            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.25")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
+        
+        # FILTRO ADICIONAL: Detectar búsquedas irrelevantes por falta de coincidencia léxica
+        # Si los primeros 3 resultados tienen text_score = 0, probablemente es basura
+        if len(filtered_rows) >= 3:
+            top_3_text_scores = [r.get('text_score', 0) for r in filtered_rows[:3]]
+            if all(score == 0 for score in top_3_text_scores):
+                logger.info(f"🚫 Filtro léxico: Top 3 resultados sin coincidencia de texto. Probablemente búsqueda irrelevante.")
+                return []
         
         # Si después del filtro no hay resultados, devolver vacío
         if not filtered_rows:
