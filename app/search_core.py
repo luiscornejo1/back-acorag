@@ -49,42 +49,68 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         else:
             where_filter = "WHERE"
         
-        # SQL con agrupación por documento para evitar duplicados
-        # Usa DISTINCT ON para mantener solo el chunk más relevante de cada documento
+        # SQL con ROW_NUMBER para evitar duplicados y ordenar correctamente por relevancia
+        # Primero obtiene el chunk más relevante de cada documento, luego ordena globalmente por score
         sql = f"""
-        SELECT DISTINCT ON (dc.document_id)
-          dc.document_id,
-          dc.project_id,
-          d.title,
-          COALESCE(d.number, '') AS number,
-          COALESCE(d.category, '') AS category,
-          COALESCE(d.doc_type, '') AS doc_type,
-          COALESCE(d.revision, '') AS revision,
-          COALESCE(d.filename, '') AS filename,
-          COALESCE(d.file_type, '') AS file_type,
-          d.date_modified,
-          dc.content AS snippet,
-          (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
-          (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
-          ) AS text_score,
-          (1 - (dc.embedding <=> '{query_embedding}')) * 0.7 + 
-          (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
-            ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
-          ) * 0.3 AS score
-        FROM document_chunks dc
-        JOIN documents d ON d.document_id = dc.document_id
-        {where_filter} 1=1
-        ORDER BY dc.document_id, score DESC
+        SELECT 
+          document_id,
+          project_id,
+          title,
+          number,
+          category,
+          doc_type,
+          revision,
+          filename,
+          file_type,
+          date_modified,
+          snippet,
+          vector_score,
+          text_score,
+          score
+        FROM (
+          SELECT
+            dc.document_id,
+            dc.project_id,
+            d.title,
+            COALESCE(d.number, '') AS number,
+            COALESCE(d.category, '') AS category,
+            COALESCE(d.doc_type, '') AS doc_type,
+            COALESCE(d.revision, '') AS revision,
+            COALESCE(d.filename, '') AS filename,
+            COALESCE(d.file_type, '') AS file_type,
+            d.date_modified,
+            dc.content AS snippet,
+            (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
+            (
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+              ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
+            ) AS text_score,
+            (1 - (dc.embedding <=> '{query_embedding}')) * 0.7 + 
+            (
+              ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) +
+              ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+              ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
+            ) * 0.3 AS score,
+            ROW_NUMBER() OVER (PARTITION BY dc.document_id ORDER BY 
+              (1 - (dc.embedding <=> '{query_embedding}')) * 0.7 + 
+              (
+                ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) +
+                ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+                ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
+              ) * 0.3 DESC
+            ) AS rn
+          FROM document_chunks dc
+          JOIN documents d ON d.document_id = dc.document_id
+          {where_filter} 1=1
+        ) ranked
+        WHERE rn = 1
+        ORDER BY score DESC
         LIMIT %s
         """
         
-        # Agregar parámetros: 6 queries (3 para text_score + 3 para score) + top_k
-        params.extend([query, query, query, query, query, query, top_k])
+        # Agregar parámetros: 9 queries (3 para text_score + 3 para score + 3 para ROW_NUMBER) + top_k
+        params.extend([query, query, query, query, query, query, query, query, query, top_k])
         
         logger.info(f"🔍 SQL ready - params count: {len(params)}")
         

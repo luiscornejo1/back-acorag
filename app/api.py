@@ -10,8 +10,10 @@ import os
 
 from .search_core import semantic_search, get_conn
 
-# Version: v4.0 - PESOS EXTREMOS x20 para título - FORZAR REDEPLOY
-# Fecha: 2025-11-13 04:00 AM
+# Version: v5.0 - FIX CRITICAL: ROW_NUMBER para ordenar por relevancia (no por document_id)
+# Fecha: 2025-11-13 05:30 AM
+# Cambio: Reemplazado DISTINCT ON por ROW_NUMBER() + ORDER BY score DESC
+# Motivo: DISTINCT ON + ORDER BY document_id causaba que LIMIT cortara por ID alfabético, no por score
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
 
