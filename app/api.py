@@ -83,24 +83,12 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             score = row.get('score', 0)
             logger.info(f"  {i}. Score: {score:.4f} - {title}...")
         
-        # Threshold MÍNIMO para permitir búsquedas - Filtrado manual por usuario
-        if max_score >= 0.5:
-            threshold = 0.10  # Muy permisivo
-        elif max_score >= 0.35:
-            threshold = 0.08  # Súper permisivo
-        elif max_score >= 0.25:
-            threshold = 0.05  # Ultra permisivo
-        else:
-            threshold = 0.03  # Casi sin filtro
-            logger.info(f"⚠️  Búsqueda con scores bajos. Max score: {max_score:.3f}")
+        # Threshold simple - Sin filtros complejos
+        threshold = 0.15  # Muy permisivo
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
         
-        # LOG para debug: Mostrar cuántos resultados pasaron el filtro
         logger.info(f"🔍 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
-        
-        # FILTRO DESACTIVADO TEMPORALMENTE - Causaba falsos positivos
-        # TODO: Mejorar filtro léxico para no bloquear búsquedas válidas
         
         # Si después del filtro no hay resultados, devolver vacío
         if not filtered_rows:
