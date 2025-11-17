@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel, Field
@@ -7,19 +7,24 @@ import uuid
 import json
 import logging
 import os
+from datetime import timedelta
 
 from .search_core import semantic_search, get_conn
-
-# Version: v5.1 - Threshold inteligente dinámico (50% del max score)
-# Fecha: 2025-11-13 05:45 AM
-# Cambio: Threshold = max(max_score * 0.5, 0.15) + límite 20 resultados
-# Motivo: Filtrar resultados irrelevantes manteniendo los verdaderamente relevantes
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
+from .auth import (
+    UserRegister, UserLogin, TokenResponse, UserResponse,
+    get_password_hash, verify_password, create_access_token,
+    get_current_user, ensure_users_table,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aconex RAG API", version="1.0")
+
+# Asegurar que la tabla de usuarios existe
+ensure_users_table()
 
 # Incluir router de analytics
 app.include_router(analytics_router, prefix="/api", tags=["Analytics"])
@@ -59,6 +64,134 @@ class FeedbackRequest(BaseModel):
     rating: int = Field(..., ge=1, le=5)  # 1-5 stars o 1=👎, 5=👍
     comment: Optional[str] = None
 
+
+# ============================================================================
+# ENDPOINTS DE AUTENTICACIÓN
+# ============================================================================
+
+@app.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserRegister):
+    """
+    Registra un nuevo usuario
+    """
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            # Verificar si el email ya existe
+            cur.execute("SELECT email FROM users WHERE email = %s", (user_data.email,))
+            if cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El email ya está registrado"
+                )
+            
+            # Hashear password
+            password_hash = get_password_hash(user_data.password)
+            
+            # Insertar usuario
+            cur.execute("""
+                INSERT INTO users (email, password_hash, full_name)
+                VALUES (%s, %s, %s)
+                RETURNING user_id, email, full_name, created_at
+            """, (user_data.email, password_hash, user_data.full_name))
+            
+            user = cur.fetchone()
+            conn.commit()
+            
+            # Crear token
+            access_token = create_access_token(
+                data={"sub": str(user[0])},
+                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            )
+            
+            logger.info(f"✅ Usuario registrado: {user_data.email}")
+            
+            return TokenResponse(
+                access_token=access_token,
+                user=UserResponse(
+                    id=str(user[0]),
+                    email=user[1],
+                    full_name=user[2],
+                    created_at=user[3].isoformat()
+                )
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error en registro: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al registrar usuario"
+        )
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+def login(credentials: UserLogin):
+    """
+    Inicia sesión y devuelve un token JWT
+    """
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            # Buscar usuario
+            cur.execute("""
+                SELECT user_id, email, full_name, password_hash, created_at
+                FROM users
+                WHERE email = %s
+            """, (credentials.email,))
+            
+            user = cur.fetchone()
+            
+            if not user or not verify_password(credentials.password, user[3]):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Email o contraseña incorrectos"
+                )
+            
+            # Actualizar last_login
+            cur.execute("""
+                UPDATE users SET last_login = NOW()
+                WHERE user_id = %s
+            """, (user[0],))
+            conn.commit()
+            
+            # Crear token
+            access_token = create_access_token(
+                data={"sub": str(user[0])},
+                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            )
+            
+            logger.info(f"✅ Login exitoso: {credentials.email}")
+            
+            return TokenResponse(
+                access_token=access_token,
+                user=UserResponse(
+                    id=str(user[0]),
+                    email=user[1],
+                    full_name=user[2],
+                    created_at=user[4].isoformat()
+                )
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error en login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al iniciar sesión"
+        )
+
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """
+    Obtiene la información del usuario actual (requiere token)
+    """
+    return UserResponse(**current_user)
+
+
+# ============================================================================
+# ENDPOINTS DE BÚSQUEDA Y CHAT (ahora requieren autenticación opcional)
+# ============================================================================
+
 @app.post("/search")
 def search(req: SearchRequest) -> List[Dict[str, Any]]:
     try:
@@ -70,49 +203,35 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         )
         
         # THRESHOLD ADAPTATIVO PARA MEJOR PRECISIÓN
-        # - Threshold dinámico basado en el mejor score obtenido
-        # - Filtra resultados muy irrelevantes pero permite documentos reales
+        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.45
+        # - Si hay resultados con score > 0.4, usar threshold 0.35
+        # - Si no hay nada relevante (max < 0.35), devolver lista vacía
+        # - NUNCA mostrar resultados con score < 0.35 (evita coincidencias irrelevantes)
         
         if not rows:
             return []
         
         max_score = max(r.get('score', 0) for r in rows)
         
-        # LOG DETALLADO: Mostrar top 5 resultados para análisis
-        logger.info(f"📊 Top 5 resultados de búsqueda:")
-        for i, row in enumerate(rows[:5], 1):
-            title = row.get('title', 'Sin título')[:50]
-            score = row.get('score', 0)
-            logger.info(f"  {i}. Score: {score:.4f} - {title}...")
+        # Threshold estricto para evitar resultados irrelevantes (como "michael jackson")
+        if max_score >= 0.5:
+            threshold = 0.45  # Alta precisión: solo resultados muy relevantes
+        elif max_score >= 0.40:
+            threshold = 0.35  # Precisión media: resultados relevantes
+        else:
+            # Si el mejor resultado tiene score < 0.40, probablemente no hay nada relevante
+            threshold = 0.40  # Threshold alto que no pasará ningún resultado
+            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.40")
         
-        # FILTRO INTELIGENTE DE RELEVANCIA
-        # 1. Threshold dinámico: 50% del score máximo (evita resultados muy malos)
-        min_threshold = max_score * 0.5
-        
-        # 2. Threshold absoluto mínimo: 0.15 (para queries muy genéricas)
-        absolute_min = 0.15
-        
-        # Usar el mayor de los dos thresholds
-        threshold = max(min_threshold, absolute_min)
-        
-        logger.info(f"🎯 Threshold inteligente: {threshold:.3f} (max_score={max_score:.3f} * 0.5 vs min={absolute_min})")
-        
-        # Filtrar por threshold
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
         
-        logger.info(f"📊 Filtrado: {len(filtered_rows)}/{len(rows)} resultados pasaron threshold {threshold:.2f}")
-        
-        # 3. Si quedan muy pocos resultados (<3), bajar threshold un poco
-        if len(filtered_rows) < 3 and len(rows) >= 3:
-            threshold = max_score * 0.35  # Más permisivo
-            filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
-            logger.info(f"⚡ Threshold ajustado a {threshold:.3f} para tener al menos 3 resultados ({len(filtered_rows)} obtenidos)")
-        
-        # 4. Limitar a top 20 para no saturar (incluso si pasan el threshold)
-        filtered_rows = filtered_rows[:20]
+        # Si después del filtro no hay resultados, devolver vacío
+        if not filtered_rows:
+            logger.info(f"🚫 Todos los resultados filtrados. Max score: {max_score:.3f}, Threshold: {threshold:.2f}")
+            return []
         
         # Log para debugging
-        logger.info(f"📊 Max score: {max_score:.3f}, Threshold: {threshold:.2f}, Resultados: {len(filtered_rows)}")
+        logger.info(f"📊 Max score: {max_score:.3f}, Threshold usado: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
         
         return filtered_rows
     except Exception as e:
