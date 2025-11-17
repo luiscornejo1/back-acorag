@@ -10,6 +10,7 @@ import os
 from datetime import timedelta
 
 from .search_core import semantic_search, get_conn
+from .utils import get_db_connection
 from .analytics import router as analytics_router
 from .upload import upload_and_ingest
 from .auth import (
@@ -75,7 +76,7 @@ def register(user_data: UserRegister):
     Registra un nuevo usuario
     """
     try:
-        with get_conn() as conn, conn.cursor() as cur:
+        with get_db_connection() as conn, conn.cursor() as cur:
             # Verificar si el email ya existe
             cur.execute("SELECT email FROM users WHERE email = %s", (user_data.email,))
             if cur.fetchone():
@@ -130,7 +131,7 @@ def login(credentials: UserLogin):
     Inicia sesión y devuelve un token JWT
     """
     try:
-        with get_conn() as conn, conn.cursor() as cur:
+        with get_db_connection() as conn, conn.cursor() as cur:
             # Buscar usuario
             cur.execute("""
                 SELECT user_id, email, full_name, password_hash, created_at

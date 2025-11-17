@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 import logging
 
-from .utils import get_conn
+from .utils import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
     
     # Buscar usuario en la base de datos
-    with get_conn() as conn, conn.cursor() as cur:
+    with get_db_connection() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT user_id, email, full_name, created_at
             FROM users
@@ -132,7 +132,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 def ensure_users_table():
     """Crea la tabla de usuarios si no existe"""
-    with get_conn() as conn, conn.cursor() as cur:
+    with get_db_connection() as conn, conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
