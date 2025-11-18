@@ -207,26 +207,18 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             probes=req.probes,
         )
         
-        # THRESHOLD ADAPTATIVO PARA MEJOR PRECISIÓN
-        # - Si hay resultados con score > 0.5 (alta confianza), usar threshold 0.45
-        # - Si hay resultados con score > 0.4, usar threshold 0.35
-        # - Si no hay nada relevante (max < 0.35), devolver lista vacía
-        # - NUNCA mostrar resultados con score < 0.35 (evita coincidencias irrelevantes)
+        # THRESHOLD PERMISIVO (0.15) - Permite más resultados
+        # - Devuelve documentos incluso con scores moderados/bajos
+        # - Útil cuando el embedding model da scores conservadores
+        # - El usuario puede evaluar la relevancia visualmente
         
         if not rows:
             return []
         
         max_score = max(r.get('score', 0) for r in rows)
         
-        # Threshold estricto para evitar resultados irrelevantes (como "michael jackson")
-        if max_score >= 0.5:
-            threshold = 0.45  # Alta precisión: solo resultados muy relevantes
-        elif max_score >= 0.40:
-            threshold = 0.35  # Precisión media: resultados relevantes
-        else:
-            # Si el mejor resultado tiene score < 0.40, probablemente no hay nada relevante
-            threshold = 0.40  # Threshold alto que no pasará ningún resultado
-            logger.info(f"🚫 Búsqueda sin resultados relevantes. Max score: {max_score:.3f} < 0.40")
+        # Threshold fijo y permisivo
+        threshold = 0.15  # Muy permisivo - permite ver más resultados
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
         
@@ -236,7 +228,7 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             return []
         
         # Log para debugging
-        logger.info(f"📊 Max score: {max_score:.3f}, Threshold usado: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
+        logger.info(f"📊 Max score: {max_score:.3f}, Threshold: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
         
         return filtered_rows
     except Exception as e:
