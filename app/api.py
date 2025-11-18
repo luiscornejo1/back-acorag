@@ -1,3 +1,7 @@
+"""
+Aconex RAG API - Sistema de autenticación y búsqueda
+Version: 1.1.0 - Auth system with JWT
+"""
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
