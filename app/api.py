@@ -43,10 +43,17 @@ app.add_middleware(
 )
 
 class SearchRequest(BaseModel):
-    query: str = Field(..., min_length=1)
-    project_id: Optional[str] = None
-    top_k: int = Field(default=5, ge=1, le=50)
-    probes: int = Field(default=10, ge=1, le=100)
+    query: str = Field(..., min_length=1, description="Texto a buscar en los documentos")
+    top_k: int = Field(default=50, ge=1, le=50, description="Cantidad máxima de resultados a devolver")
+    probes: int = Field(default=10, ge=1, le=100, description="Precisión de búsqueda vectorial (mayor = más preciso pero más lento)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "informe mensual costos",
+                "top_k": 50
+            }
+        }
 
 class ChatMessage(BaseModel):
     role: str  # 'user' o 'assistant'
@@ -202,7 +209,7 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
     try:
         rows = semantic_search(
             query=req.query,
-            project_id=req.project_id,
+            project_id=None,
             top_k=req.top_k,
             probes=req.probes,
         )
