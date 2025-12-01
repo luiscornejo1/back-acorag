@@ -46,12 +46,14 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Texto a buscar en los documentos")
     top_k: int = Field(default=50, ge=1, le=50, description="Cantidad máxima de resultados a devolver")
     probes: int = Field(default=10, ge=1, le=100, description="Precisión de búsqueda vectorial (mayor = más preciso pero más lento)")
+    strict_mode: bool = Field(default=False, description="Modo estricto: solo resultados con score >= 0.65")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "informe mensual costos",
-                "top_k": 50
+                "top_k": 50,
+                "strict_mode": False
             }
         }
 
@@ -214,31 +216,59 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
             probes=req.probes,
         )
         
-        # THRESHOLD PERMISIVO (0.15) - Permite más resultados
-        # - Devuelve documentos incluso con scores moderados/bajos
-        # - Útil cuando el embedding model da scores conservadores
-        # - El usuario puede evaluar la relevancia visualmente
-        
         if not rows:
             return []
         
-        max_score = max(r.get('score', 0) for r in rows)
+        # Calcular estadísticas de scores
+        scores = [r.get('score', 0) for r in rows]
+        max_score = max(scores)
+        min_score = min(scores)
+        avg_score = sum(scores) / len(scores)
         
-        # Threshold fijo y permisivo
-        threshold = 0.15  # Muy permisivo - permite ver más resultados
+        # Determinar threshold según modo
+        if req.strict_mode:
+            # Modo estricto: solo resultados muy relevantes
+            threshold = 0.65
+            logger.info(f"🔒 MODO ESTRICTO activado (threshold >= {threshold})")
+        else:
+            # Modo adaptativo: filtrar resultados con relevancia baja
+            threshold = 0.35  # Aumentado de 0.20 a 0.35 para mejor calidad
+            logger.info(f"🔓 MODO ADAPTATIVO (threshold >= {threshold})")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
         
-        # Si después del filtro no hay resultados, devolver vacío
-        if not filtered_rows:
-            logger.info(f"🚫 Todos los resultados filtrados. Max score: {max_score:.3f}, Threshold: {threshold:.2f}")
-            return []
+        # Agregar metadata de calidad a cada resultado
+        for row in filtered_rows:
+            score = row.get('score', 0)
+            vector_score = row.get('vector_score', 0)
+            
+            # Clasificar calidad del match
+            if score >= 0.80:
+                row['match_quality'] = 'EXCELENTE'
+                row['match_color'] = 'green'
+            elif score >= 0.65:
+                row['match_quality'] = 'MUY BUENO'
+                row['match_color'] = 'lightgreen'
+            elif score >= 0.50:
+                row['match_quality'] = 'BUENO'
+                row['match_color'] = 'yellow'
+            elif score >= 0.35:
+                row['match_quality'] = 'MODERADO'
+                row['match_color'] = 'orange'
+            else:
+                row['match_quality'] = 'BAJO'
+                row['match_color'] = 'red'
         
-        # Log para debugging
-        logger.info(f"📊 Max score: {max_score:.3f}, Threshold: {threshold:.2f}, Resultados: {len(filtered_rows)}/{len(rows)}")
+        # Log estadísticas
+        logger.info(
+            f"📊 Stats: Max={max_score:.3f}, Min={min_score:.3f}, Avg={avg_score:.3f} | "
+            f"Resultados: {len(filtered_rows)}/{len(rows)} | Threshold: {threshold}"
+        )
         
         return filtered_rows
+        
     except Exception as e:
+        logger.error(f"❌ Error en búsqueda: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
@@ -699,6 +729,31 @@ def get_document_file(document_id: str):
     except Exception as e:
         logger.error(f"Error al obtener archivo de documento {document_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/document/{document_id}/exists")
+def check_document_exists(document_id: str):
+    """
+    Endpoint rápido para validar si un documento existe en la BD.
+    Útil para invalidar cache en el frontend.
+    
+    Returns:
+        {"exists": true} si existe, {"exists": false} si no
+    """
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM documents WHERE document_id = %s", 
+                    (document_id,)
+                )
+                exists = cur.fetchone() is not None
+        
+        return {"exists": exists, "document_id": document_id}
+    
+    except Exception as e:
+        logger.error(f"Error al verificar existencia del documento {document_id}: {e}")
+        # En caso de error, asumimos que no existe
+        return {"exists": False, "document_id": document_id, "error": str(e)}
 
 @app.get("/document/{document_id}/preview")
 def get_document_preview(document_id: str):
