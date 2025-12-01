@@ -154,21 +154,21 @@ def _execute_search(query: str, query_embedding: str, project_id: str | None,
         dc.content AS snippet,
         (1 - (dc.embedding <=> '{query_embedding}')) AS vector_score,
         (
-          ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-          ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+          ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.title, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) * 2.0 +
+          ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.number, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) +
           ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
         ) AS text_score,
         (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
         (
-          ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-          ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+          ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.title, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) * 2.0 +
+          ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.number, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) +
           ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
         ) * 0.4 AS score,
         ROW_NUMBER() OVER (PARTITION BY dc.document_id ORDER BY 
           (1 - (dc.embedding <=> '{query_embedding}')) * 0.6 + 
           (
-            ts_rank(to_tsvector('spanish', COALESCE(d.title, '')), plainto_tsquery('spanish', %s)) * 2.0 +
-            ts_rank(to_tsvector('spanish', COALESCE(d.number, '')), plainto_tsquery('spanish', %s)) +
+            ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.title, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) * 2.0 +
+            ts_rank(to_tsvector('spanish', REPLACE(REPLACE(REPLACE(LOWER(COALESCE(d.number, '')), '.', ' '), '_', ' '), '-', ' ')), plainto_tsquery('spanish', %s)) +
             ts_rank(to_tsvector('spanish', COALESCE(dc.content, '')), plainto_tsquery('spanish', %s))
           ) * 0.4 DESC
         ) AS rn
