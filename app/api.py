@@ -426,6 +426,38 @@ No te limites a frases cortas. El usuario necesita información exhaustiva y bie
                 )
                 print(f"[DEBUG] Respuesta recibida de Groq", file=sys.stderr)
                 answer = response.choices[0].message.content
+                
+                # NUEVO: Filtrar solo las fuentes que se mencionan en la respuesta
+                used_sources = []
+                answer_lower = answer.lower()
+                
+                for row in relevant_rows:
+                    title = row.get('title', '').lower()
+                    number = row.get('number', '').lower()
+                    snippet = row.get('snippet', '') or row.get('content', '')
+                    snippet_lower = snippet[:200].lower()
+                    
+                    # Verificar si el documento fue citado/usado en la respuesta
+                    # Criterios: título mencionado, número mencionado, o fragmento del snippet usado
+                    title_words = set(title.split()) if title else set()
+                    snippet_words = set(snippet_lower.split()[:30])  # Primeras 30 palabras
+                    answer_words = set(answer_lower.split())
+                    
+                    # Si hay overlap significativo de palabras únicas (>3) o menciona el número/título
+                    word_overlap = len(title_words.intersection(answer_words))
+                    snippet_overlap = len(snippet_words.intersection(answer_words))
+                    
+                    if (word_overlap >= 3 or 
+                        (number and number in answer_lower) or
+                        snippet_overlap >= 8):  # Al menos 8 palabras del snippet en la respuesta
+                        used_sources.append(row)
+                
+                # Si no detectamos fuentes específicas, usar solo las top 3 más relevantes
+                if not used_sources:
+                    used_sources = relevant_rows[:3]
+                
+                print(f"[DEBUG] Fuentes usadas: {len(used_sources)} de {len(relevant_rows)} relevantes", file=sys.stderr)
+                
             except Exception as e:
                 print(f"[ERROR] {str(e)}", file=sys.stderr)
                 import traceback
@@ -445,7 +477,7 @@ No te limites a frases cortas. El usuario necesita información exhaustiva y bie
         return ChatResponse(
             question=req.question,
             answer=answer,
-            sources=relevant_rows,
+            sources=used_sources if 'used_sources' in locals() else relevant_rows[:5],  # Máximo 5 si no hay filtrado
             context_used=context,
             session_id=str(uuid.uuid4())
         )
