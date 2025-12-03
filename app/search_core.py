@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 import logging
 import numpy as np
+from .query_cleaner import clean_query, should_clean_query
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,11 +40,17 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
     
     1. Nivel Estricto (threshold 0.65): Solo resultados muy relevantes
     2. Nivel Medio (threshold 0.50): Resultados moderadamente relevantes
-    3. Nivel Amplio (threshold 0.30): Todos los resultados disponibles
+    3. Nivel Amplio (threshold 0.40): Todos los resultados disponibles
     
     El sistema automáticamente relaja los criterios si no encuentra suficientes resultados.
     """
     try:
+        # Limpiar query si es conversacional
+        original_query = query
+        if should_clean_query(query):
+            query = clean_query(query)
+            logger.info(f"🧹 Query limpiada: '{original_query}' → '{query}'")
+        
         logger.info(f"🔍 [ADAPTIVE-SEARCH] query='{query}', project_id={project_id}, top_k={top_k}")
         
         # Definir niveles de búsqueda (threshold, min_results_needed)
