@@ -1,0 +1,5 @@
+WER Summary
+===========
+Dataset: 8 casos
+WER promedio:           0.7763
+Word Accuracy promedio: 0.2237

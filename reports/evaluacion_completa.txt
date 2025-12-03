@@ -1,0 +1,69 @@
+EVALUACIÓN SEMÁNTICA COMPLETA DEL SISTEMA RAG
+================================================================================
+
+Total de casos evaluados: 8
+Fecha: 3 de Diciembre, 2025
+
+MÉTRICAS PROMEDIO:
+  BERT F1:        0.8335 ± 0.0229
+  ROUGE-1 F1:     0.4558 ± 0.0592
+  Word Accuracy:  0.2237 ± 0.0496
+
+RESULTADOS POR CASO:
+--------------------------------------------------------------------------------
+
+Caso 1: ¿Qué es el sistema Aconex RAG?
+  Categoría: definicion
+  BERT F1:     0.8590
+  ROUGE-1 F1:  0.5333
+  Word Acc:    0.2692
+  Evaluación:  BUENA: Respuesta captura bien el significado
+
+Caso 2: ¿Cómo funciona la búsqueda semántica?
+  Categoría: tecnica
+  BERT F1:     0.8380
+  ROUGE-1 F1:  0.4490
+  Word Acc:    0.1739
+  Evaluación:  BUENA: Respuesta captura bien el significado
+
+Caso 3: ¿Qué base de datos utiliza el sistema?
+  Categoría: arquitectura
+  BERT F1:     0.8456
+  ROUGE-1 F1:  0.3704
+  Word Acc:    0.3125
+  Evaluación:  ACEPTABLE: Respuesta razonablemente similar
+
+Caso 4: ¿Cuál es el tiempo de respuesta esperado?
+  Categoría: performance
+  BERT F1:     0.7850
+  ROUGE-1 F1:  0.4000
+  Word Acc:    0.2609
+  Evaluación:  ACEPTABLE: Respuesta razonablemente similar
+
+Caso 5: ¿Cómo se procesan los documentos PDF?
+  Categoría: procesamiento
+  BERT F1:     0.8371
+  ROUGE-1 F1:  0.4000
+  Word Acc:    0.1538
+  Evaluación:  ACEPTABLE: Respuesta razonablemente similar
+
+Caso 6: ¿Qué modelo de embeddings se utiliza?
+  Categoría: modelo
+  BERT F1:     0.8597
+  ROUGE-1 F1:  0.5000
+  Word Acc:    0.2000
+  Evaluación:  BUENA: Respuesta captura bien el significado
+
+Caso 7: ¿Cuántos usuarios concurrentes puede manejar?
+  Categoría: capacidad
+  BERT F1:     0.8169
+  ROUGE-1 F1:  0.4571
+  Word Acc:    0.2105
+  Evaluación:  BUENA: Respuesta captura bien el significado
+
+Caso 8: ¿Qué endpoints expone el API?
+  Categoría: api
+  BERT F1:     0.8271
+  ROUGE-1 F1:  0.5366
+  Word Acc:    0.2083
+  Evaluación:  BUENA: Respuesta captura bien el significado

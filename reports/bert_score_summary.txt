@@ -1,0 +1,6 @@
+BERT Score Summary
+==================
+Dataset: 8 casos
+Precision: 0.8577
+Recall:    0.8109
+F1:        0.8335

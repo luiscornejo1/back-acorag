@@ -1,0 +1,6 @@
+ROUGE Score Summary
+===================
+Dataset: 8 casos
+ROUGE-1 F1: 0.4558
+ROUGE-2 F1: 0.2022
+ROUGE-L F1: 0.4097
