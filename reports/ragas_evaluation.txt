@@ -1,0 +1,108 @@
+================================================================================
+EVALUACIÓN RAG CON RAGAS FRAMEWORK
+================================================================================
+
+Fecha: 04 de December, 2025 - 00:08:28
+Total de casos evaluados: 8
+
+MÉTRICAS PROMEDIO:
+--------------------------------------------------------------------------------
+  faithfulness             : 0.7708 ± 0.3666
+  answer_relevancy         : 0.7784 ± 0.2000
+  context_precision        : 1.0000 ± 0.0000
+  context_recall           : 1.0000 ± 0.0000
+  answer_similarity        : 0.8088 ± 0.0763
+  answer_correctness       : 0.6944 ± 0.1707
+
+INTERPRETACIÓN DE MÉTRICAS:
+--------------------------------------------------------------------------------
+  faithfulness        : Qué tan fiel es la respuesta al contexto (0-1)
+                        > 0.7 = Buena, < 0.5 = Revisa alucinaciones
+  answer_relevancy    : Qué tan relevante es la respuesta (0-1)
+                        > 0.7 = Buena, < 0.5 = Respuestas off-topic
+  context_precision   : Precisión del contexto recuperado (0-1)
+                        > 0.7 = Buen retrieval, < 0.5 = Ruido
+  context_recall      : Completitud del contexto (0-1)
+                        > 0.7 = Completo, < 0.5 = Falta información
+  answer_similarity   : Similitud semántica con ground truth (0-1)
+                        > 0.7 = Alta similitud, < 0.5 = Muy diferente
+  answer_correctness  : Corrección general (0-1)
+                        > 0.7 = Correcta, < 0.5 = Incorrecta
+
+RESULTADOS POR CASO:
+--------------------------------------------------------------------------------
+
+Caso 1:
+  faithfulness             : 0.0000  [REVISAR]
+  answer_relevancy         : 1.0000  [EXCELENTE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.7300  [BUENA]
+  answer_correctness       : 0.6111  [ACEPTABLE]
+
+Caso 2:
+  faithfulness             : 0.5000  [ACEPTABLE]
+  answer_relevancy         : 0.9475  [EXCELENTE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.6947  [ACEPTABLE]
+  answer_correctness       : 0.3612  [REVISAR]
+
+Caso 3:
+  faithfulness             : 1.0000  [EXCELENTE]
+  answer_relevancy         : 0.4223  [REVISAR]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.8594  [EXCELENTE]
+  answer_correctness       : 0.7148  [BUENA]
+
+Caso 4:
+  faithfulness             : 1.0000  [EXCELENTE]
+  answer_relevancy         : 0.6214  [ACEPTABLE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.7854  [BUENA]
+  answer_correctness       : 0.9464  [EXCELENTE]
+
+Caso 5:
+  faithfulness             : 1.0000  [EXCELENTE]
+  answer_relevancy         : 0.6248  [ACEPTABLE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.7592  [BUENA]
+  answer_correctness       : 0.8327  [EXCELENTE]
+
+Caso 6:
+  faithfulness             : 1.0000  [EXCELENTE]
+  answer_relevancy         : 0.8689  [EXCELENTE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.8976  [EXCELENTE]
+  answer_correctness       : 0.6530  [ACEPTABLE]
+
+Caso 7:
+  faithfulness             : 0.6667  [ACEPTABLE]
+  answer_relevancy         : 0.9019  [EXCELENTE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.8798  [EXCELENTE]
+  answer_correctness       : 0.7200  [BUENA]
+
+Caso 8:
+  faithfulness             : 1.0000  [EXCELENTE]
+  answer_relevancy         : 0.8404  [EXCELENTE]
+  context_precision        : 1.0000  [EXCELENTE]
+  context_recall           : 1.0000  [EXCELENTE]
+  answer_similarity        : 0.8643  [EXCELENTE]
+  answer_correctness       : 0.7161  [BUENA]
+
+ANÁLISIS:
+--------------------------------------------------------------------------------
+✅ faithfulness: BUENA (0.771)
+✅ answer_relevancy: BUENA (0.778)
+✅ context_precision: EXCELENTE (1.000)
+✅ context_recall: EXCELENTE (1.000)
+✅ answer_similarity: EXCELENTE (0.809)
+⚠️  answer_correctness: ACEPTABLE (0.694) - Revisar casos individuales
+
+================================================================================
