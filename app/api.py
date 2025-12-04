@@ -228,11 +228,11 @@ def search(req: SearchRequest) -> List[Dict[str, Any]]:
         # Determinar threshold según modo
         if req.strict_mode:
             # Modo estricto: solo resultados muy relevantes
-            threshold = 0.65
+            threshold = 0.15
             logger.info(f"🔒 MODO ESTRICTO activado (threshold >= {threshold})")
         else:
             # Modo adaptativo: filtrar resultados con relevancia baja
-            threshold = 0.35  # Aumentado de 0.20 a 0.35 para mejor calidad
+            threshold = 0.15  # Aumentado de 0.20 a 0.35 para mejor calidad
             logger.info(f"🔓 MODO ADAPTATIVO (threshold >= {threshold})")
         
         filtered_rows = [r for r in rows if r.get('score', 0) >= threshold]
@@ -283,13 +283,13 @@ def chat(req: ChatRequest) -> ChatResponse:
         )
         
         # FILTRO DE RELEVANCIA mejorado
-        relevant_rows = [r for r in rows if r.get('score', 0) > 0.20]
+        relevant_rows = [r for r in rows if r.get('score', 0) > 0.10]
         
         # Detectar preguntas trampa (score muy bajo)
         max_score = max((r.get('score', 0) for r in rows), default=0)
         
         # Si no hay documentos relevantes, responder directamente
-        if not relevant_rows or max_score < 0.25:
+        if not relevant_rows or max_score < 0.15:
             return ChatResponse(
                 question=req.question,
                 answer="❌ No encuentro información relevante sobre este tema en la documentación técnica disponible. Los documentos que tengo son sobre proyectos de construcción, arquitectura, cronogramas y especificaciones técnicas. ¿Puedo ayudarte con información relacionada a estos temas?",

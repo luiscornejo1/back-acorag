@@ -55,8 +55,8 @@ def semantic_search(query: str, project_id: str | None, top_k: int = 20, probes:
         
         # Definir niveles de búsqueda (threshold, min_results_needed)
         search_levels = [
-            {"name": "ESTRICTO", "threshold": 0.65, "min_results": 3},
-            {"name": "MEDIO", "threshold": 0.50, "min_results": 5},
+            {"name": "ESTRICTO", "threshold": 0.45, "min_results": 3},
+            {"name": "MEDIO", "threshold": 0.15, "min_results": 5},
             {"name": "AMPLIO", "threshold": 0.15, "min_results": 1},  # Aumentado de 0.30 a 0.40
         ]
         
